@@ -1,0 +1,245 @@
+/* =========================================
+   1. VARIABLES & RESET
+   ========================================= */
+:root {
+  /* Paleta de Colores */
+  --primary-color: #4f46e5;
+  --primary-dark: #4338ca;
+  --secondary-color: #7c3aed;
+  --bg-color: #f4f6fb;
+  --text-main: #2d3436;
+  --text-light: #636e72;
+  --white: #ffffff;
+  
+  /* Espaciado y Bordes */
+  --border-radius: 12px;
+  --container-width: 1200px;
+  
+  /* Sombras */
+  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  --shadow-glow: 0 0 15px rgba(79, 70, 229, 0.3);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; /* Fuente más moderna */
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg-color);
+  color: var(--text-main);
+  line-height: 1.6;
+}
+
+/* =========================================
+   2. LAYOUT & UTILITIES
+   ========================================= */
+.container {
+  max-width: var(--container-width);
+  margin: 0 auto;
+  padding: 100px 20px 60px; /* Más espacio arriba para la navbar fija */
+}
+
+.grid {
+  display: grid;
+  gap: 30px;
+}
+
+.grid-3 {
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Un poco más ancho */
+}
+
+/* =========================================
+   3. NAVBAR
+   ========================================= */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.95); /* Efecto vidrio sutil */
+  backdrop-filter: blur(10px);
+  box-shadow: var(--shadow-sm);
+  padding: 15px 5%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 1000;
+  transition: all 0.3s ease;
+}
+
+.navbar h2 {
+  color: var(--primary-color);
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: -0.5px;
+}
+
+.navbar nav {
+  display: flex;
+  gap: 25px;
+}
+
+.navbar a {
+  text-decoration: none;
+  color: var(--text-main);
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: color 0.3s ease;
+  position: relative;
+}
+
+.navbar a:hover {
+  color: var(--primary-color);
+}
+
+/* Pequeña animación de subrayado */
+.navbar a::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 2px;
+  bottom: -5px;
+  left: 0;
+  background-color: var(--primary-color);
+  transition: width 0.3s;
+}
+
+.navbar a:hover::after {
+  width: 100%;
+}
+
+/* =========================================
+   4. COMPONENTS (CARDS & BUTTONS)
+   ========================================= */
+.card {
+  background: var(--white);
+  border-radius: var(--border-radius);
+  padding: 30px;
+  box-shadow: var(--shadow-md);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: 1px solid rgba(0,0,0,0.03);
+}
+
+.card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-lg);
+}
+
+.button-primary {
+  display: inline-block;
+  padding: 12px 28px;
+  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  color: var(--white);
+  border-radius: 50px; /* Bordes más redondeados para botones modernos */
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(79, 70, 229, 0.2);
+  border: none;
+  cursor: pointer;
+}
+
+.button-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-glow);
+  filter: brightness(1.1);
+}
+
+.button-primary:active {
+  transform: translateY(-1px);
+}
+
+/* =========================================
+   5. FORMS
+   ========================================= */
+.form-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--primary-color), #8b5cf6);
+  padding: 20px;
+}
+
+.form-box {
+  background: var(--white);
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  border-radius: 20px;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.form-box h2 {
+  margin-bottom: 25px;
+  color: var(--text-main);
+}
+
+.form-box input {
+  width: 100%;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 1rem;
+  transition: all 0.3s;
+  outline: none;
+}
+
+.form-box input:focus {
+  border-color: var(--primary-color);
+  background: var(--white);
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+}
+
+.form-box button {
+  width: 100%;
+  padding: 14px;
+  border-radius: 10px;
+  border: none;
+  background: var(--primary-color);
+  color: var(--white);
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.form-box button:hover {
+  background: var(--primary-dark);
+}
+
+/* =========================================
+   6. RESPONSIVE (MOBILE)
+   ========================================= */
+@media (max-width: 768px) {
+  .navbar {
+    padding: 15px 20px;
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .navbar nav {
+    gap: 15px;
+  }
+
+  .container {
+    padding: 120px 20px 40px;
+  }
+  
+  .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
