@@ -7,6 +7,8 @@ import Dashboard from "./pages/Dashboard";
 import Areas from "./pages/Areas";
 import Retos from "./pages/Retos";
 import Progreso from "./pages/Progreso";
+import Profile from "./pages/Profile";
+import History from "./pages/History";
 
 export default function App() {
   return (
@@ -17,6 +19,8 @@ export default function App() {
       <Route path="/areas" element={<Areas />} />
       <Route path="/retos/:area" element={<Retos />} />
       <Route path="/progreso" element={<Progreso />} />
+      <Route path="/profile" element={<Profile />} />
+      <Route path="/history" element={<History />} />
     </Routes>
   );
 }

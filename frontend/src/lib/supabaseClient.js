@@ -1,6 +1,23 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = "";
-const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxdGx5Z3hpdXpsZ3VyaXdkbmxqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzMTAzNjQsImV4cCI6MjA4NTg4NjM2NH0.KTeItNU03mT1ini_AATBSFB23fLs6YQD6pXohZ-w6fA";
+// Leer variables desde .env (Vite)
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Validación clara para evitar pantalla blanca sin explicación
+if (!supabaseUrl) {
+  console.error("❌ VITE_SUPABASE_URL no está definida");
+}
+
+if (!supabaseAnonKey) {
+  console.error("❌ VITE_SUPABASE_ANON_KEY no está definida");
+}
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    "Faltan variables de entorno de Supabase. Verifica que el archivo .env esté en la raíz de /frontend y reinicia el servidor."
+  );
+}
+
+// Crear cliente Supabase
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
