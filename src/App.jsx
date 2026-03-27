@@ -1,18 +1,21 @@
-﻿import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
-import Navbar from "./components/Navbar";
+// src/App.jsx
+import { Routes, Route } from "react-router-dom";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
+import Areas from "./pages/Areas";
 import Retos from "./pages/Retos";
+import Progreso from "./pages/Progreso";
 
 export default function App() {
   return (
-    <div style={{ backgroundColor: "#fdfdff", minHeight: "100vh", fontFamily: "Inter, system-ui, sans-serif" }}>
-      <Navbar />
-      <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/areas" element={<Retos />} />
-      </Routes>
-    </div>
+    <Routes>
+      <Route path="/" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/areas" element={<Areas />} />
+      <Route path="/retos/:area" element={<Retos />} />
+      <Route path="/progreso" element={<Progreso />} />
+    </Routes>
   );
 }

@@ -1,31 +1,25 @@
-﻿import React from "react";
-import { Link } from "react-router-dom";
-
-const areas = [
-  { id: "matematicas", nombre: "Matemáticas" },
-  { id: "logica", nombre: "Lógica" },
-  { id: "programacion", nombre: "Programación" },
-  { id: "memoria", nombre: "Memoria" }
-];
+import { useParams } from "react-router-dom";
+import Navbar from "../components/Navbar";
+import RetoCard from "../components/RetoCard";
 
 export default function Retos() {
+  const { area } = useParams();
+
+  const retos = [
+    { id: 1, titulo: "Reto básico", dificultad: "Fácil", puntos: 10 },
+    { id: 2, titulo: "Reto intermedio", dificultad: "Media", puntos: 20 },
+    { id: 3, titulo: "Reto avanzado", dificultad: "Difícil", puntos: 30 }
+  ];
+
   return (
-    <div style={{ padding: "50px 20px", maxWidth: "1100px", margin: "0 auto" }}>
-      <h1 style={{ fontSize: "32px", fontWeight: "900", marginBottom: "45px", textAlign: "center", color: "#0f172a" }}>Áreas de Entrenamiento</h1>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "30px" }}>
-        {areas.map(a => (
-          <Link to={`/retos/${a.id}`} key={a.id} style={{ textDecoration: "none" }}>
-            <div style={{ 
-              background: "#fff", padding: "45px", borderRadius: "28px", textAlign: "center", 
-              border: "1px solid #f1f5f9", boxShadow: "0 10px 15px rgba(0,0,0,0.03)",
-              transition: "transform 0.2s"
-            }}>
-              <div style={{ fontSize: "45px", marginBottom: "20px" }}>🧠</div>
-              <div style={{ fontWeight: "800", color: "#334155", fontSize: "20px" }}>{a.nombre}</div>
-            </div>
-          </Link>
+    <>
+      <Navbar />
+      <div style={{ padding: "20px" }}>
+        <h2>Retos de {area}</h2>
+        {retos.map(reto => (
+          <RetoCard key={reto.id} reto={reto} />
         ))}
       </div>
-    </div>
+    </>
   );
 }
