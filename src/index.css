@@ -1,2 +1,18 @@
-﻿/* Reset temporal para restaurar vista */
-body { margin: 0; font-family: sans-serif; background: #f4f4f4; }
+﻿@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilos base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
