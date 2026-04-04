@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import Navbar from "../components/Navbar";
 
-// ── Gráfica de área SVG (sin dependencias externas) ──
+// ── Gráfica de área SVG ──
 function AreaChart({ data, days }) {
   const W = 860, H = 220;
   const PAD = { t: 20, r: 20, b: 36, l: 48 };
@@ -53,24 +53,16 @@ function AreaChart({ data, days }) {
 
 const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
-// ── Componente principal ──
 export default function Dashboard() {
 
-  // ── Estado con datos reales ──
-  const [userName,   setUserName]   = useState("...");
-  const [stats,      setStats]      = useState({
-    xp:           0,
-    xpMeta:       100,
-    nivel:        1,
-    racha:        0,
-    retos:        0,
-    ranking:      "-",
-    retosHoy:     0,
-    retosHoyMeta: 5,
-    metaSemanal:  0,
+  const [userName, setUserName] = useState("...");
+  const [stats,    setStats]    = useState({
+    xp: 0, xpMeta: 100, nivel: 1, racha: 0,
+    retos: 0, ranking: "-", retosHoy: 0,
+    retosHoyMeta: 5, metaSemanal: 0,
   });
-  const [weeklyXp,   setWeeklyXp]   = useState([0, 0, 0, 0, 0, 0, 0]);
-  const [loading,    setLoading]    = useState(true);
+  const [weeklyXp, setWeeklyXp] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
     const cargarDatos = async () => {
@@ -79,7 +71,7 @@ export default function Dashboard() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // 2. Nombre: primero busca en tabla usuarios, luego metadata OAuth
+        // 2. Datos del usuario desde la tabla
         const { data: usuarioDB } = await supabase
           .from("usuarios")
           .select("nombre, xp, nivel, racha, ultimo_login")
@@ -95,42 +87,42 @@ export default function Dashboard() {
         setUserName(nombre);
 
         const xp    = usuarioDB?.xp    || 0;
-        const nivel = usuarioDB?.nivel  || 1;
-        const racha = usuarioDB?.racha  || 0;
+        const nivel = usuarioDB?.nivel || 1;
+        const racha = usuarioDB?.racha || 0;
+        const xpMeta = Math.pow(nivel * 10, 2);
 
-        // 3. XP necesario para el siguiente nivel
-        const xpMeta = Math.pow((nivel) * 10, 2);
-
-        // 4. Retos completados en total
+        // 3. Retos completados en total ✅ usuario_id correcto
         const { count: totalRetos } = await supabase
           .from("progreso")
           .select("*", { count: "exact", head: true })
-          .eq("ususario_id", user.id)
+          .eq("usuario_id", user.id)
           .eq("completado", true);
 
-        // 5. Retos completados HOY
+        // 4. Retos completados HOY
         const hoy = new Date().toISOString().split("T")[0];
         const { count: retosHoy } = await supabase
           .from("progreso")
           .select("*", { count: "exact", head: true })
-          .eq("ususario_id", user.id)
+          .eq("usuario_id", user.id)
           .eq("completado", true)
           .gte("fecha", `${hoy}T00:00:00`)
           .lte("fecha", `${hoy}T23:59:59`);
 
-        // 6. Ranking del usuario (posición por XP)
+        // 5. Ranking (cuántos usuarios tienen más XP que yo)
         const { count: ranking } = await supabase
           .from("usuarios")
           .select("*", { count: "exact", head: true })
           .gt("xp", xp);
 
-        // 7. Meta semanal: retos esta semana vs meta (5 por día × 7 = 35)
+        // 6. Meta semanal
         const inicioSemana = new Date();
         inicioSemana.setDate(inicioSemana.getDate() - inicioSemana.getDay());
+        inicioSemana.setHours(0, 0, 0, 0);
+
         const { count: retosSemana } = await supabase
           .from("progreso")
           .select("*", { count: "exact", head: true })
-          .eq("ususario_id", user.id)
+          .eq("usuario_id", user.id)
           .eq("completado", true)
           .gte("fecha", inicioSemana.toISOString());
 
@@ -138,16 +130,16 @@ export default function Dashboard() {
           Math.round(((retosSemana || 0) / 35) * 100), 100
         );
 
-        // 8. XP por día esta semana para la gráfica
+        // 7. XP por día esta semana para la gráfica
         const xpSemana = await Promise.all(
           Array.from({ length: 7 }, async (_, i) => {
-            const dia = new Date();
-            dia.setDate(dia.getDate() - dia.getDay() + i);
+            const dia = new Date(inicioSemana);
+            dia.setDate(inicioSemana.getDate() + i);
             const diaStr = dia.toISOString().split("T")[0];
             const { data } = await supabase
               .from("progreso")
               .select("puntuacion")
-              .eq("ususario_id", user.id)
+              .eq("usuario_id", user.id)
               .eq("completado", true)
               .gte("fecha", `${diaStr}T00:00:00`)
               .lte("fecha", `${diaStr}T23:59:59`);
@@ -155,15 +147,11 @@ export default function Dashboard() {
           })
         );
 
-        setWeeklyXp(xpSemana.length ? xpSemana : [0,0,0,0,0,0,0]);
-
+        setWeeklyXp(xpSemana);
         setStats({
-          xp,
-          xpMeta,
-          nivel,
-          racha,
+          xp, xpMeta, nivel, racha,
           retos:        totalRetos  || 0,
-          ranking:      (ranking || 0) + 1,
+          ranking:      (ranking    || 0) + 1,
           retosHoy:     retosHoy   || 0,
           retosHoyMeta: 5,
           metaSemanal,
@@ -181,7 +169,6 @@ export default function Dashboard() {
 
   const xpPct = Math.min(Math.round((stats.xp / stats.xpMeta) * 100), 100);
 
-  // ── Loading skeleton ──
   if (loading) {
     return (
       <>
@@ -229,7 +216,6 @@ export default function Dashboard() {
           padding: 100px 24px 80px;
         }
 
-        /* ── HERO ── */
         .hero {
           display: grid;
           grid-template-columns: 1fr 1fr;
@@ -263,7 +249,6 @@ export default function Dashboard() {
         }
         .btn-continue:hover { transform: translateY(-2px); box-shadow: 0 14px 30px rgba(124,58,237,0.5); }
 
-        /* ── HERO CARD ── */
         .hero-card {
           background: #fff; border-radius: 24px; padding: 28px;
           color: #1e293b; position: relative;
@@ -312,12 +297,12 @@ export default function Dashboard() {
         .logro-banner h4 { font-size: 0.92rem; font-weight: 700; }
         .logro-banner p  { font-size: 0.78rem; opacity: 0.88; }
 
-        /* ── STATS ROW ── */
         .stats-grid {
           display: grid; grid-template-columns: repeat(4,1fr);
           gap: 16px; margin-bottom: 56px;
         }
         @media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
+        @media (max-width: 480px) { .stats-grid { grid-template-columns: 1fr; } }
 
         .stat-card {
           background: #fff; border-radius: 18px; padding: 22px 20px;
@@ -330,7 +315,6 @@ export default function Dashboard() {
         .s-lbl2 { font-size: 0.78rem; color: #94a3b8; font-weight: 500; margin-bottom: 2px; }
         .s-val2 { font-size: 1.7rem; font-weight: 800; color: #1e293b; }
 
-        /* ── ACCESO RÁPIDO ── */
         .section-title { font-size: 1.35rem; font-weight: 700; color: #f1f5f9; margin-bottom: 18px; }
         .quick-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; margin-bottom: 56px; }
         @media (max-width: 768px) { .quick-grid { grid-template-columns: 1fr; } }
@@ -348,14 +332,12 @@ export default function Dashboard() {
         .quick-card p  { font-size: 0.85rem; color: #64748b; }
         .go-link { font-size: 0.85rem; color: #7c3aed; font-weight: 600; }
 
-        /* ── CHART ── */
         .chart-card {
           background: #fff; border-radius: 20px; padding: 28px;
           margin-bottom: 56px; box-shadow: 0 4px 16px rgba(0,0,0,0.08);
         }
         .chart-card h3 { font-size: 1rem; font-weight: 700; color: #1e293b; margin-bottom: 20px; }
 
-        /* ── FOOTER ── */
         .dash-footer {
           border-top: 1px solid #1e293b; padding-top: 24px;
           display: flex; justify-content: space-between;
@@ -375,12 +357,18 @@ export default function Dashboard() {
         <section className="hero fade1">
           <div className="hero-left">
             <h1>¡Hola, {userName}! 👋</h1>
-            <p>Estás en racha. Sigue aprendiendo y alcanza nuevas metas.</p>
+            <p>
+              {stats.racha > 0
+                ? "Estás en racha. Sigue aprendiendo y alcanza nuevas metas."
+                : "Bienvenido. ¡Completa tu primer reto hoy!"}
+            </p>
 
             <div style={{ marginBottom: "20px" }}>
               <div className="streak-badge">
                 <span className="s-lbl">Racha activa</span>
-                <span className="s-val">🔥 {stats.racha} días</span>
+                <span className="s-val">
+                  {stats.racha > 0 ? `🔥 ${stats.racha} días` : "🌱 ¡Empieza hoy!"}
+                </span>
               </div>
             </div>
 
@@ -389,7 +377,7 @@ export default function Dashboard() {
                 <circle cx="12" cy="12" r="10"/>
                 <polygon points="10 8 16 12 10 16 10 8"/>
               </svg>
-              Continuar aprendiendo
+              {stats.retos > 0 ? "Continuar aprendiendo" : "Empezar ahora"}
             </Link>
           </div>
 
@@ -455,8 +443,22 @@ export default function Dashboard() {
                 <path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/>
               </svg>
               <div>
-                <h4>¡Logro desbloqueado!</h4>
-                <p>Racha de {stats.racha} días 🔥</p>
+                {stats.racha >= 7 ? (
+                  <>
+                    <h4>¡Logro desbloqueado! 🏆</h4>
+                    <p>Racha de {stats.racha} días 🔥</p>
+                  </>
+                ) : stats.retos > 0 ? (
+                  <>
+                    <h4>¡Sigue así! 💪</h4>
+                    <p>{stats.retos} retos completados hasta ahora</p>
+                  </>
+                ) : (
+                  <>
+                    <h4>¡Bienvenido a Cognify!</h4>
+                    <p>Completa tu primer reto para ganar XP</p>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -521,7 +523,7 @@ export default function Dashboard() {
         {/* ══ ACTIVIDAD RECIENTE ══ */}
         <h2 className="section-title fade4">Actividad reciente</h2>
         <div className="chart-card fade4">
-          <h3>Progreso semanal</h3>
+          <h3>Progreso semanal — XP ganado por día</h3>
           <AreaChart data={weeklyXp} days={DAYS} />
         </div>
 
