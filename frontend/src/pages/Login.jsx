@@ -41,7 +41,7 @@ const loginGithub = async () => {
   await supabase.auth.signInWithOAuth({ 
     provider: "github",
     options: {
-      redirectTo: "https://cognify-v2-ri9w.vercel.app"
+      redirectTo: "https://cognify-v2-ri9w.vercel.app/auth/callback"
     }
   });
 };

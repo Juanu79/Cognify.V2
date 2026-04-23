@@ -2,7 +2,6 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from "./lib/supabaseClient"; 
 
-// Importación de páginas
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
@@ -18,7 +17,6 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Obtener la sesión activa al cargar la aplicación
     const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
@@ -27,19 +25,16 @@ export default function App() {
 
     getInitialSession();
 
-    // 2. Escuchar cambios en tiempo real (Login, Logout, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null);
       setLoading(false);
     });
 
-    // Limpieza al desmontar el componente
     return () => {
       subscription.unsubscribe();
     };
   }, []);
 
-  // Evita mostrar las rutas mientras se verifica si hay un usuario
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -50,11 +45,9 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Rutas Públicas */}
       <Route path="/" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
       <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
-
-      {/* Rutas Privadas (Redirigen a "/" si no hay usuario) */}
+      <Route path="/auth/callback" element={<Navigate to="/dashboard" />} />
       <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/" />} />
       <Route path="/areas" element={user ? <Areas /> : <Navigate to="/" />} />
       <Route path="/retos/:area" element={user ? <Retos /> : <Navigate to="/" />} />
@@ -62,8 +55,6 @@ export default function App() {
       <Route path="/profile" element={user ? <Profile /> : <Navigate to="/" />} />
       <Route path="/history" element={user ? <History /> : <Navigate to="/" />} />
       <Route path="/salas" element={user ? <Salas user={user} /> : <Navigate to="/" />} />
-
-      {/* Redirección por defecto si la ruta no existe */}
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
