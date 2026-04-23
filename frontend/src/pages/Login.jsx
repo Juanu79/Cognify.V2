@@ -28,16 +28,25 @@ export default function Login() {
   };
 
   /* LOGIN GOOGLE */
-  const loginGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "google" });
-  };
-
+ const loginGoogle = async () => {
+  await supabase.auth.signInWithOAuth({ 
+    provider: "google",
+    options: {
+      redirectTo: "https://cognify-v2-ri9w.vercel.app"
+    }
+  });
+};
   /* LOGIN GITHUB */
-  const loginGithub = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "github" });
-  };
+const loginGithub = async () => {
+  await supabase.auth.signInWithOAuth({ 
+    provider: "github",
+    options: {
+      redirectTo: "https://cognify-v2-ri9w.vercel.app"
+    }
+  });
+};
 
-  return (
+ return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
