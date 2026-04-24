@@ -2,6 +2,7 @@
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import LogoP from "../assets/LogoP.png";
+import { Browser } from '@capacitor/browser';
 
 export default function Register() {
   const [email, setEmail] = useState("");
@@ -26,19 +27,29 @@ export default function Register() {
     setLoading(false);
   };
 
-  const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ 
-      provider: "google",
-      options: { redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback" }
-    });
-  };
+ const loginGoogle = async () => {
+  const { data } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback",
+      skipBrowserRedirect: true
+    }
+  });
+  if (data?.url) await Browser.open({ url: data.url });
+};
 
-  const handleGithub = async () => {
-    await supabase.auth.signInWithOAuth({ 
-      provider: "github",
-      options: { redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback" }
-    });
-  };
+  const loginGithub = async () => {
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "github",
+    options: {
+      redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback",
+      skipBrowserRedirect: true
+    }
+  });
+  if (data?.url) {
+    await Browser.open({ url: data.url });
+  }
+};
 
   return (
     <>
