@@ -4,10 +4,11 @@ import { supabase } from "../lib/supabaseClient";
 import LogoDash from "../assets/LogoDash.png";
 
 export default function Navbar() {
-  const [user,     setUser]     = useState(null);
+  const [user, setUser] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
-  const navigate  = useNavigate();
-  const location  = useLocation();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     const loadUser = async () => {
@@ -22,6 +23,7 @@ export default function Navbar() {
 
     const handleClickOutside = (e) => {
       if (!e.target.closest(".user-menu-wrap")) setShowMenu(false);
+      if (!e.target.closest(".navbar")) setMobileOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
 
@@ -35,6 +37,7 @@ export default function Navbar() {
     await supabase.auth.signOut();
     setUser(null);
     setShowMenu(false);
+    setMobileOpen(false);
     navigate("/");
   };
 
@@ -174,6 +177,104 @@ export default function Navbar() {
           transition: opacity 0.2s;
         }
         .auth-fill:hover { opacity: 0.9; }
+
+        /* ── HAMBURGUESA ── */
+        .hamburger {
+          display: none;
+          flex-direction: column; justify-content: center; gap: 5px;
+          background: none; border: none; cursor: pointer;
+          padding: 6px; border-radius: 8px;
+          transition: background 0.2s;
+        }
+        .hamburger:hover { background: #f1f5f9; }
+        .hamburger span {
+          display: block; width: 22px; height: 2px;
+          background: #475569; border-radius: 2px;
+          transition: all 0.3s;
+        }
+        .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+        .hamburger.open span:nth-child(2) { opacity: 0; }
+        .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+        /* ── MOBILE MENU ── */
+        .mobile-menu {
+          display: none;
+          flex-direction: column;
+          background: #fff;
+          border-top: 1px solid #f1f5f9;
+          padding: 12px 16px 16px;
+          gap: 4px;
+          animation: slideDown 0.2s ease;
+        }
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .mobile-menu.open { display: flex; }
+
+        .mobile-link {
+          text-decoration: none; color: #475569;
+          font-weight: 500; font-size: 0.95rem;
+          padding: 12px 16px; border-radius: 10px;
+          transition: background 0.2s, color 0.2s;
+          display: flex; align-items: center; gap: 8px;
+        }
+        .mobile-link:hover  { background: #f1f5f9; color: #7c3aed; }
+        .mobile-link.active { color: #7c3aed; font-weight: 600; background: #ede9fe; }
+
+        .mobile-salas {
+          text-decoration: none;
+          background: linear-gradient(135deg, #7c3aed, #6d28d9);
+          color: #fff !important; font-weight: 600; font-size: 0.95rem;
+          padding: 12px 16px; border-radius: 10px;
+          display: flex; align-items: center; gap: 8px;
+          margin-top: 4px;
+        }
+
+        .mobile-divider { height: 1px; background: #f1f5f9; margin: 8px 0; }
+
+        .mobile-user-info {
+          padding: 8px 16px 4px;
+          font-size: 0.82rem; color: #94a3b8;
+        }
+        .mobile-user-info strong { display: block; color: #1e293b; font-size: 0.88rem; word-break: break-all; }
+
+        .mobile-logout {
+          background: none; border: none; cursor: pointer;
+          color: #ef4444; font-weight: 500; font-size: 0.95rem;
+          padding: 12px 16px; border-radius: 10px;
+          display: flex; align-items: center; gap: 8px;
+          width: 100%; text-align: left;
+          font-family: 'Poppins', sans-serif;
+          transition: background 0.2s;
+        }
+        .mobile-logout:hover { background: #fee2e2; }
+
+        .mobile-auth {
+          display: flex; flex-direction: column; gap: 8px; margin-top: 4px;
+        }
+        .mobile-auth-outline {
+          text-decoration: none; padding: 12px 16px;
+          border-radius: 10px; font-weight: 600; font-size: 0.95rem;
+          border: 1.5px solid #e2e8f0; color: #475569;
+          text-align: center; transition: all 0.2s;
+        }
+        .mobile-auth-fill {
+          text-decoration: none; padding: 12px 16px;
+          border-radius: 10px; font-weight: 600; font-size: 0.95rem;
+          background: linear-gradient(135deg,#7c3aed,#6d28d9);
+          color: #fff; text-align: center;
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+          .nav-center { display: none; }
+          .nav-right .user-name { display: none; }
+          .nav-right .user-arrow { display: none; }
+          .nav-right .auth-btns { display: none; }
+          .hamburger { display: flex; }
+          .user-btn { padding: 4px; }
+        }
       `}</style>
 
       <nav className="navbar">
@@ -184,6 +285,7 @@ export default function Navbar() {
             <span className="nav-logo-text">Cognify</span>
           </Link>
 
+          {/* Desktop center links */}
           <div className="nav-center">
             <Link to="/dashboard" className={`nav-link${isActive("/dashboard") ? " active" : ""}`}>Dashboard</Link>
             <Link to="/areas"     className={`nav-link${isActive("/areas")     ? " active" : ""}`}>Áreas</Link>
@@ -192,6 +294,7 @@ export default function Navbar() {
           </div>
 
           <div className="nav-right">
+            {/* Desktop user menu */}
             {user && (
               <div className="user-menu-wrap">
                 <button className="user-btn" onClick={() => setShowMenu(!showMenu)}>
@@ -228,8 +331,44 @@ export default function Navbar() {
                 <Link to="/register" className="auth-fill">Registrarse</Link>
               </div>
             )}
+
+            {/* Hamburger button */}
+            <button
+              className={`hamburger${mobileOpen ? " open" : ""}`}
+              onClick={() => setMobileOpen(!mobileOpen)}
+            >
+              <span /><span /><span />
+            </button>
           </div>
 
+        </div>
+
+        {/* Mobile menu */}
+        <div className={`mobile-menu${mobileOpen ? " open" : ""}`}>
+          <Link to="/dashboard" className={`mobile-link${isActive("/dashboard") ? " active" : ""}`} onClick={() => setMobileOpen(false)}>📊 Dashboard</Link>
+          <Link to="/areas"     className={`mobile-link${isActive("/areas")     ? " active" : ""}`} onClick={() => setMobileOpen(false)}>📚 Áreas</Link>
+          <Link to="/progreso"  className={`mobile-link${isActive("/progreso")  ? " active" : ""}`} onClick={() => setMobileOpen(false)}>📈 Progreso</Link>
+          <Link to="/salas"     className="mobile-salas" onClick={() => setMobileOpen(false)}>🎮 Salas</Link>
+
+          {user && (
+            <>
+              <div className="mobile-divider" />
+              <div className="mobile-user-info">
+                Conectado como <strong>{user.email}</strong>
+              </div>
+              <Link to="/profile"  className="mobile-link" onClick={() => setMobileOpen(false)}>👤 Perfil</Link>
+              <Link to="/history"  className="mobile-link" onClick={() => setMobileOpen(false)}>📋 Historial</Link>
+              <div className="mobile-divider" />
+              <button className="mobile-logout" onClick={handleLogout}>🚪 Cerrar sesión</button>
+            </>
+          )}
+
+          {!user && (
+            <div className="mobile-auth">
+              <Link to="/"         className="mobile-auth-outline" onClick={() => setMobileOpen(false)}>Iniciar Sesión</Link>
+              <Link to="/register" className="mobile-auth-fill"    onClick={() => setMobileOpen(false)}>Registrarse</Link>
+            </div>
+          )}
         </div>
       </nav>
     </>
