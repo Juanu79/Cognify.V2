@@ -1,18 +1,18 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import LogoP from "../assets/LogoP.png";
 
 export default function Register() {
-  const [email, setEmail]       = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
-  const [success, setSuccess]   = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
   const navigate = useNavigate();
 
-  /* REGISTRO CON EMAIL */
   const handleRegister = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -26,14 +26,18 @@ export default function Register() {
     setLoading(false);
   };
 
-  /* LOGIN GOOGLE */
   const handleGoogle = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "google" });
+    await supabase.auth.signInWithOAuth({ 
+      provider: "google",
+      options: { redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback" }
+    });
   };
 
-  /* LOGIN GITHUB */
   const handleGithub = async () => {
-    await supabase.auth.signInWithOAuth({ provider: "github" });
+    await supabase.auth.signInWithOAuth({ 
+      provider: "github",
+      options: { redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback" }
+    });
   };
 
   return (
@@ -50,9 +54,6 @@ export default function Register() {
           background: #f0f4ff;
         }
 
-        /* ══════════════════════════════
-           LEFT PANEL — formulario
-        ══════════════════════════════ */
         .reg-left {
           width: 50%;
           background: linear-gradient(160deg, #fff 55%, #ede9ff 100%);
@@ -62,307 +63,147 @@ export default function Register() {
           padding: 48px 40px;
         }
 
-        .form-box {
-          width: 100%;
-          max-width: 420px;
-        }
+        .form-box { width: 100%; max-width: 420px; }
+        .form-welcome { font-size: 2rem; font-weight: 800; color: #1a1a2e; margin-bottom: 4px; }
+        .form-sub { font-size: 0.88rem; color: #888; margin-bottom: 36px; }
+        .field-label { font-size: 0.82rem; font-weight: 600; color: #333; margin-bottom: 8px; display: block; }
 
-        .form-welcome {
-          font-size: 2rem;
-          font-weight: 800;
-          color: #1a1a2e;
-          margin-bottom: 4px;
-        }
-
-        .form-sub {
-          font-size: 0.88rem;
-          color: #888;
-          margin-bottom: 36px;
-        }
-
-        .field-label {
-          font-size: 0.82rem;
-          font-weight: 600;
-          color: #333;
-          margin-bottom: 8px;
-          display: block;
-        }
-
-        .input-wrapper {
-          position: relative;
-          margin-bottom: 22px;
-        }
-
+        .input-wrapper { position: relative; margin-bottom: 22px; }
         .input-icon {
-          position: absolute;
-          left: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: #aaa;
-          display: flex;
-          align-items: center;
+          position: absolute; left: 14px; top: 50%;
+          transform: translateY(-50%); color: #aaa;
+          display: flex; align-items: center;
         }
-
         .styled-input {
-          width: 100%;
-          padding: 14px 44px 14px 44px;
-          border: none;
-          border-bottom: 2px solid #d0d0e0;
-          background: #f4f2ff;
-          border-radius: 10px 10px 0 0;
-          font-size: 0.93rem;
-          font-family: 'Poppins', sans-serif;
-          color: #222;
-          outline: none;
-          transition: border-color 0.25s;
+          width: 100%; padding: 14px 44px 14px 44px;
+          border: none; border-bottom: 2px solid #d0d0e0;
+          background: #f4f2ff; border-radius: 10px 10px 0 0;
+          font-size: 0.93rem; font-family: 'Poppins', sans-serif;
+          color: #222; outline: none; transition: border-color 0.25s;
         }
         .styled-input:focus { border-bottom-color: #5b21f5; }
         .styled-input::placeholder { color: #bbb; }
 
         .toggle-pw {
-          position: absolute;
-          right: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          background: none;
-          border: none;
-          cursor: pointer;
-          color: #aaa;
-          display: flex;
-          align-items: center;
-          padding: 0;
+          position: absolute; right: 14px; top: 50%;
+          transform: translateY(-50%); background: none;
+          border: none; cursor: pointer; color: #aaa;
+          display: flex; align-items: center; padding: 0;
         }
 
-        .error-box {
-          background: #ffe5e5;
-          color: #b91c1c;
-          padding: 10px 14px;
-          border-radius: 8px;
-          margin-bottom: 18px;
-          font-size: 0.85rem;
-        }
+        .error-box { background: #ffe5e5; color: #b91c1c; padding: 10px 14px; border-radius: 8px; margin-bottom: 18px; font-size: 0.85rem; }
+        .success-box { background: #e6f9f0; color: #065f46; padding: 12px 16px; border-radius: 10px; margin-bottom: 18px; font-size: 0.88rem; border-left: 4px solid #10b981; }
 
-        .success-box {
-          background: #e6f9f0;
-          color: #065f46;
-          padding: 12px 16px;
-          border-radius: 10px;
-          margin-bottom: 18px;
-          font-size: 0.88rem;
-          border-left: 4px solid #10b981;
-        }
-
-        .btn-row {
-          display: flex;
-          gap: 14px;
-          margin-top: 10px;
-          align-items: center;
-        }
-
+        .btn-row { display: flex; gap: 14px; margin-top: 10px; align-items: center; }
         .btn-register {
-          flex: 1;
-          padding: 14px 20px;
-          border-radius: 50px;
-          border: none;
+          flex: 1; padding: 14px 20px; border-radius: 50px; border: none;
           background: linear-gradient(135deg, #6c63ff, #3b1ff5);
-          color: #fff;
-          font-size: 0.95rem;
-          font-weight: 700;
-          font-family: 'Poppins', sans-serif;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          transition: opacity 0.2s, transform 0.15s;
+          color: #fff; font-size: 0.95rem; font-weight: 700;
+          font-family: 'Poppins', sans-serif; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          gap: 8px; transition: opacity 0.2s, transform 0.15s;
         }
         .btn-register:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
         .btn-register:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .btn-login {
-          flex: 1;
-          padding: 14px 20px;
-          border-radius: 50px;
-          border: 1.5px solid #ddd;
-          background: transparent;
-          color: #aaa;
-          font-size: 0.95rem;
-          font-weight: 600;
-          font-family: 'Poppins', sans-serif;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          text-decoration: none;
-          transition: border-color 0.2s, color 0.2s;
+          flex: 1; padding: 14px 20px; border-radius: 50px;
+          border: 1.5px solid #ddd; background: transparent;
+          color: #aaa; font-size: 0.95rem; font-weight: 600;
+          font-family: 'Poppins', sans-serif; cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          text-decoration: none; transition: border-color 0.2s, color 0.2s;
         }
         .btn-login:hover { border-color: #5b21f5; color: #5b21f5; }
 
         .divider-row {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin: 28px 0 16px;
-          color: #bbb;
-          font-size: 0.8rem;
+          display: flex; align-items: center; gap: 12px;
+          margin: 28px 0 16px; color: #bbb; font-size: 0.8rem;
         }
-        .divider-row::before,
-        .divider-row::after {
-          content: '';
-          flex: 1;
-          height: 1px;
-          background: #e5e5ee;
+        .divider-row::before, .divider-row::after {
+          content: ''; flex: 1; height: 1px; background: #e5e5ee;
         }
 
-        .social-row {
-          display: flex;
-          gap: 12px;
-        }
-
+        .social-row { display: flex; gap: 12px; }
         .social-btn {
-          flex: 1;
-          padding: 11px;
-          border-radius: 10px;
-          border: 1px solid #e0e0f0;
-          background: #fff;
-          cursor: pointer;
-          font-size: 0.85rem;
-          font-family: 'Poppins', sans-serif;
-          font-weight: 600;
-          color: #444;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
+          flex: 1; padding: 11px; border-radius: 10px;
+          border: 1px solid #e0e0f0; background: #fff; cursor: pointer;
+          font-size: 0.85rem; font-family: 'Poppins', sans-serif;
+          font-weight: 600; color: #444; display: flex;
+          align-items: center; justify-content: center; gap: 8px;
           transition: border-color 0.2s, box-shadow 0.2s;
         }
         .social-btn:hover { border-color: #5b21f5; box-shadow: 0 2px 8px rgba(91,33,245,0.12); }
 
-        .footer-text {
-          margin-top: 24px;
-          text-align: center;
-          font-size: 0.85rem;
-          color: #888;
-        }
+        .footer-text { margin-top: 24px; text-align: center; font-size: 0.85rem; color: #888; }
         .footer-text a { color: #5b21f5; font-weight: 600; text-decoration: none; }
         .footer-text a:hover { text-decoration: underline; }
 
-        /* ══════════════════════════════
-           RIGHT PANEL — decorativo
-        ══════════════════════════════ */
         .reg-right {
           width: 50%;
           background: linear-gradient(145deg, #3b1ff5 0%, #5b35ff 35%, #2563eb 80%, #1d4ed8 100%);
-          position: relative;
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 48px 40px;
-          color: #fff;
+          position: relative; overflow: hidden;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          padding: 48px 40px; color: #fff;
         }
 
-        /* blobs */
-        .rblob {
-          position: absolute;
-          border-radius: 50%;
-          filter: blur(70px);
-          opacity: 0.22;
-          pointer-events: none;
-        }
+        .rblob { position: absolute; border-radius: 50%; filter: blur(70px); opacity: 0.22; pointer-events: none; }
         .rblob1 { width: 320px; height: 320px; background: #a78bfa; top: -90px; right: -80px; }
         .rblob2 { width: 240px; height: 240px; background: #60a5fa; bottom: -60px; left: -40px; }
         .rblob3 { width: 160px; height: 160px; background: #fff; top: 50%; left: 50%; transform: translate(-50%,-50%); }
 
-        /* circles */
-        .rcircle {
-          position: absolute;
-          border-radius: 50%;
-          border: 2px solid rgba(255,255,255,0.15);
-          pointer-events: none;
-        }
+        .rcircle { position: absolute; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); pointer-events: none; }
         .rc1 { width: 240px; height: 240px; top: -70px; left: -70px; }
-        .rc2 { width: 150px; height: 150px; top: 30px;  left: 80px;  }
+        .rc2 { width: 150px; height: 150px; top: 30px; left: 80px; }
         .rc3 { width: 200px; height: 200px; bottom: -60px; right: -60px; }
-        .rc4 { width: 100px; height: 100px; bottom: 80px;  right: 80px;  }
+        .rc4 { width: 100px; height: 100px; bottom: 80px; right: 80px; }
 
         .right-logo-box {
-          width: 100px;
-          height: 100px;
+          width: 100px; height: 100px;
           background: rgba(255,255,255,0.15);
-          border-radius: 22px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 28px;
-          backdrop-filter: blur(6px);
+          border-radius: 22px; display: flex;
+          align-items: center; justify-content: center;
+          margin-bottom: 28px; backdrop-filter: blur(6px);
           border: 1px solid rgba(255,255,255,0.28);
-          position: relative;
-          z-index: 1;
+          position: relative; z-index: 1;
         }
 
-        .right-title {
-          font-size: 2.2rem;
-          font-weight: 800;
-          text-align: center;
-          line-height: 1.2;
-          margin-bottom: 16px;
-          position: relative;
-          z-index: 1;
-        }
-
-        .right-subtitle {
-          font-size: 0.9rem;
-          text-align: center;
-          opacity: 0.82;
-          line-height: 1.6;
-          max-width: 280px;
-          position: relative;
-          z-index: 1;
-        }
+        .right-title { font-size: 2.2rem; font-weight: 800; text-align: center; line-height: 1.2; margin-bottom: 16px; position: relative; z-index: 1; }
+        .right-subtitle { font-size: 0.9rem; text-align: center; opacity: 0.82; line-height: 1.6; max-width: 280px; position: relative; z-index: 1; }
 
         .right-footer {
-          position: absolute;
-          bottom: 28px;
-          display: flex;
-          gap: 24px;
-          align-items: center;
-          z-index: 1;
+          position: absolute; bottom: 28px;
+          display: flex; gap: 24px; align-items: center; z-index: 1;
         }
-
-        .right-footer a {
-          color: rgba(255,255,255,0.82);
-          text-decoration: none;
-          font-size: 0.72rem;
-          font-weight: 600;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          transition: opacity 0.2s;
-        }
-        .right-footer a:hover { opacity: 1; }
+        .right-footer a { color: rgba(255,255,255,0.82); text-decoration: none; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
         .right-footer .sep { color: rgba(255,255,255,0.35); font-size: 1rem; }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+          .reg-wrapper { flex-direction: column; height: auto; min-height: 100vh; }
+          .reg-right { display: none; }
+          .reg-left {
+            width: 100%;
+            min-height: 100vh;
+            padding: 48px 24px;
+            align-items: flex-start;
+            padding-top: 60px;
+          }
+        }
       `}</style>
 
       <div className="reg-wrapper">
 
-        {/* ── LEFT: formulario ── */}
         <div className="reg-left">
           <div className="form-box">
-
             <h2 className="form-welcome">Crear cuenta</h2>
             <p className="form-sub">Regístrate para empezar a aprender</p>
 
             {error   && <div className="error-box">⚠ {error}</div>}
-            {success && (
-              <div className="success-box">
-                ✅ Cuenta creada. Revisa tu correo para confirmar.
-              </div>
-            )}
+            {success && <div className="success-box">✅ Cuenta creada. Revisa tu correo para confirmar.</div>}
 
             <form onSubmit={handleRegister}>
-
-              {/* Email */}
               <label className="field-label">Correo Electrónico</label>
               <div className="input-wrapper">
                 <span className="input-icon">
@@ -371,17 +212,9 @@ export default function Register() {
                     <path d="M2 7l10 7 10-7"/>
                   </svg>
                 </span>
-                <input
-                  className="styled-input"
-                  type="email"
-                  placeholder="Ingresa tu correo"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                <input className="styled-input" type="email" placeholder="Ingresa tu correo" required value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
 
-              {/* Password */}
               <label className="field-label">Contraseña</label>
               <div className="input-wrapper">
                 <span className="input-icon">
@@ -390,19 +223,8 @@ export default function Register() {
                     <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                   </svg>
                 </span>
-                <input
-                  className="styled-input"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Crea tu contraseña"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  className="toggle-pw"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
+                <input className="styled-input" type={showPassword ? "text" : "password"} placeholder="Crea tu contraseña" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                <button type="button" className="toggle-pw" onClick={() => setShowPassword(!showPassword)}>
                   {showPassword ? (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
@@ -424,7 +246,6 @@ export default function Register() {
                 </button>
                 <Link to="/" className="btn-login">Iniciar sesión</Link>
               </div>
-
             </form>
 
             <div className="divider-row">O continúa con</div>
@@ -448,42 +269,26 @@ export default function Register() {
             </div>
 
             <p className="footer-text">
-              ¿Ya tienes cuenta?{" "}
-              <Link to="/">Inicia sesión</Link>
+              ¿Ya tienes cuenta? <Link to="/">Inicia sesión</Link>
             </p>
-
           </div>
         </div>
 
-        {/* ── RIGHT: panel decorativo ── */}
         <div className="reg-right">
-          {/* blobs */}
           <div className="rblob rblob1" />
           <div className="rblob rblob2" />
           <div className="rblob rblob3" />
-          {/* circles */}
           <div className="rcircle rc1" />
           <div className="rcircle rc2" />
           <div className="rcircle rc3" />
           <div className="rcircle rc4" />
 
-          {/* logo box */}
           <div className="right-logo-box">
-            <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-              {/* brain / sparkle icon */}
-              <circle cx="26" cy="26" r="18" fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="2"/>
-              <path d="M18 26c0-4.418 3.582-8 8-8s8 3.582 8 8" stroke="white" strokeWidth="2.2" strokeLinecap="round"/>
-              <path d="M22 26c0-2.209 1.791-4 4-4s4 1.791 4 4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="26" cy="26" r="2.5" fill="white"/>
-              <path d="M26 18v-3M26 37v-3M18 26h-3M37 26h-3" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-              <path d="M20.1 20.1l-2.1-2.1M33.9 33.9l-2.1-2.1M33.9 20.1l2.1-2.1M20.1 33.9l-2.1 2.1" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
+            <img src={LogoP} alt="Cognify Logo" style={{ width: '70px', height: '70px', objectFit: 'contain', borderRadius: '12px' }} />
           </div>
 
           <h1 className="right-title">Únete a<br />Cognify</h1>
-          <p className="right-subtitle">
-            Comienza tu viaje de aprendizaje hoy. Miles de lecciones te esperan. 🧠✨
-          </p>
+          <p className="right-subtitle">Comienza tu viaje de aprendizaje hoy. Miles de lecciones te esperan. 🧠✨</p>
 
           <div className="right-footer">
             <Link to="/">INICIAR SESIÓN</Link>

@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import LogoP from "../assets/LogoP.png";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -11,7 +12,6 @@ export default function Login() {
 
   const navigate = useNavigate();
 
-  /* LOGIN NORMAL */
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -27,26 +27,21 @@ export default function Login() {
     }
   };
 
-  /* LOGIN GOOGLE */
- const loginGoogle = async () => {
-  await supabase.auth.signInWithOAuth({ 
-    provider: "google",
-    options: {
-      redirectTo: "https://cognify-v2-ri9w.vercel.app"
-    }
-  });
-};
-  /* LOGIN GITHUB */
-const loginGithub = async () => {
-  await supabase.auth.signInWithOAuth({ 
-    provider: "github",
-    options: {
-      redirectTo: "https://cognify-v2-ri9w-six.vercel.app"
-    }
-  });
-};
+  const loginGoogle = async () => {
+    await supabase.auth.signInWithOAuth({ 
+      provider: "google",
+      options: { redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback" }
+    });
+  };
 
- return (
+  const loginGithub = async () => {
+    await supabase.auth.signInWithOAuth({ 
+      provider: "github",
+      options: { redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback" }
+    });
+  };
+
+  return (
     <>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap');
@@ -60,7 +55,6 @@ const loginGithub = async () => {
           background: #f5f5fa;
         }
 
-        /* ── LEFT PANEL ── */
         .left-panel {
           width: 50%;
           background: linear-gradient(145deg, #a020f0 0%, #7b00d4 40%, #6a00c0 100%);
@@ -74,7 +68,6 @@ const loginGithub = async () => {
           color: #fff;
         }
 
-        /* decorative circles */
         .circle {
           position: absolute;
           border-radius: 50%;
@@ -86,7 +79,6 @@ const loginGithub = async () => {
         .c3 { width: 180px; height: 180px; bottom: -50px; left: -50px; }
         .c4 { width: 90px;  height: 90px;  bottom: 80px;  left: 80px;  }
 
-        /* wavy blobs */
         .blob {
           position: absolute;
           border-radius: 50%;
@@ -109,8 +101,6 @@ const loginGithub = async () => {
           backdrop-filter: blur(4px);
           border: 1px solid rgba(255,255,255,0.3);
         }
-
-        .left-logo-box svg { width: 52px; height: 52px; }
 
         .left-title {
           font-size: 2.2rem;
@@ -148,7 +138,6 @@ const loginGithub = async () => {
         .left-footer a:hover { opacity: 1; }
         .left-footer .sep { color: rgba(255,255,255,0.4); font-size: 1rem; }
 
-        /* ── RIGHT PANEL ── */
         .right-panel {
           width: 50%;
           background: linear-gradient(160deg, #fff 60%, #f3e8ff 100%);
@@ -344,32 +333,33 @@ const loginGithub = async () => {
           margin-bottom: 20px;
         }
         .forgot-link:hover { text-decoration: underline; }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+          .login-wrapper { flex-direction: column; height: auto; min-height: 100vh; }
+          .left-panel { display: none; }
+          .right-panel {
+            width: 100%;
+            min-height: 100vh;
+            padding: 48px 24px;
+            align-items: flex-start;
+            padding-top: 60px;
+          }
+        }
       `}</style>
 
       <div className="login-wrapper">
 
-        {/* ── LEFT PANEL ── */}
         <div className="left-panel">
-          {/* blobs */}
           <div className="blob blob1" />
           <div className="blob blob2" />
-          {/* circles */}
           <div className="circle c1" />
           <div className="circle c2" />
           <div className="circle c3" />
           <div className="circle c4" />
 
-          {/* logo box */}
           <div className="left-logo-box">
-            {/* rocket SVG matching the reference */}
-            <svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M26 6C26 6 38 12 38 26C38 36 32 44 26 46C20 44 14 36 14 26C14 12 26 6 26 6Z"
-                fill="rgba(255,255,255,0.25)" stroke="white" strokeWidth="2"/>
-              <path d="M26 14L28.5 22H36L30 27L32.5 35L26 30L19.5 35L22 27L16 22H23.5L26 14Z"
-                fill="white"/>
-              <circle cx="18" cy="34" r="4" fill="rgba(255,255,255,0.35)" stroke="white" strokeWidth="1.5"/>
-              <circle cx="34" cy="34" r="4" fill="rgba(255,255,255,0.35)" stroke="white" strokeWidth="1.5"/>
-            </svg>
+            <img src={LogoP} alt="Cognify Logo" style={{ width: '70px', height: '70px', objectFit: 'contain', borderRadius: '12px' }} />
           </div>
 
           <h1 className="left-title">Bienvenido a<br />Cognify</h1>
@@ -378,13 +368,12 @@ const loginGithub = async () => {
           </p>
 
           <div className="left-footer">
-            <Link to="/register" className="">CREAR CUENTA</Link>
+            <Link to="/register">CREAR CUENTA</Link>
             <span className="sep">|</span>
-            <Link to="/" className="">DESCUBRIR</Link>
+            <Link to="/">DESCUBRIR</Link>
           </div>
         </div>
 
-        {/* ── RIGHT PANEL ── */}
         <div className="right-panel">
           <div className="form-box">
             <h2 className="form-welcome">Bienvenido a Cognify</h2>
@@ -393,7 +382,6 @@ const loginGithub = async () => {
             {error && <div className="error-box">⚠ {error}</div>}
 
             <form onSubmit={handleSubmit}>
-              {/* Email */}
               <label className="field-label">Correo Electrónico</label>
               <div className="input-wrapper">
                 <span className="input-icon">
@@ -412,7 +400,6 @@ const loginGithub = async () => {
                 />
               </div>
 
-              {/* Password */}
               <label className="field-label">Contraseña</label>
               <div className="input-wrapper">
                 <span className="input-icon">
@@ -429,11 +416,7 @@ const loginGithub = async () => {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-                <button
-                  type="button"
-                  className="toggle-pw"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
+                <button type="button" className="toggle-pw" onClick={() => setShowPassword(!showPassword)}>
                   {showPassword ? (
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
@@ -485,7 +468,6 @@ const loginGithub = async () => {
             </p>
           </div>
         </div>
-
       </div>
     </>
   );
