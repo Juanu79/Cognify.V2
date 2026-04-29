@@ -2,6 +2,7 @@
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import LogoP from "../assets/LogoP.png";
+import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 
 export default function Register() {
@@ -28,27 +29,29 @@ export default function Register() {
   };
 
  const loginGoogle = async () => {
-  const { data } = await supabase.auth.signInWithOAuth({
+  const isNative = Capacitor.isNativePlatform();
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback",
-      skipBrowserRedirect: true
+      redirectTo: window.location.origin + "/auth/callback",
+      skipBrowserRedirect: isNative
     }
   });
-  if (data?.url) await Browser.open({ url: data.url });
+  if (error) { console.error(error); return; }
+  if (isNative && data?.url) await Browser.open({ url: data.url });
 };
 
-  const loginGithub = async () => {
+const loginGithub = async () => {
+  const isNative = Capacitor.isNativePlatform();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "github",
     options: {
-      redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback",
-      skipBrowserRedirect: true
+      redirectTo: window.location.origin + "/auth/callback",
+      skipBrowserRedirect: isNative
     }
   });
-  if (data?.url) {
-    await Browser.open({ url: data.url });
-  }
+  if (error) { console.error(error); return; }
+  if (isNative && data?.url) await Browser.open({ url: data.url });
 };
 
   return (
@@ -262,7 +265,7 @@ export default function Register() {
             <div className="divider-row">O continúa con</div>
 
             <div className="social-row">
-              <button className="social-btn" onClick={handleGoogle}>
+              <button className="social-btn" onClick={loginGoogle}>
                 <svg width="18" height="18" viewBox="0 0 48 48">
                   <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.16 7.09-10.29 7.09-17.65z"/>
                   <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.16C6.51 42.62 14.62 48 24 48z"/>
@@ -271,7 +274,7 @@ export default function Register() {
                 </svg>
                 Google
               </button>
-              <button className="social-btn" onClick={handleGithub}>
+              <button className="social-btn" onClick={loginGithub}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
                 </svg>
