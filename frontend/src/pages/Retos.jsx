@@ -32,69 +32,62 @@ export default function Retos() {
   const [countdown,       setCountdown]       = useState(0);
   const countdownRef = useRef(null);
 
-  /* ── Cargar datos ── */
   useEffect(() => {
-    const init = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        setUserId(user.id);
+  const init = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      setUserId(user.id);
 
-        // Temas del área con sus retos
-        const { data: temasData, error } = await supabase
-          .from("temas")
-          .select(`
-            id, nombre, explicacion, orden,
-            retos ( id, titulo, descripcion, dificultad, xp_reward, problem, answer, category )
-          `)
-          .eq("area_id", `(SELECT id FROM areas WHERE nombre = '${decodedArea}')`)
-          .order("orden");
+      // Obtener ID del área
+      const { data: areaData } = await supabase
+        .from("areas")
+        .select("id")
+        .eq("nombre", decodedArea)
+        .single();
 
-        // Alternativa: query en dos pasos para evitar subquery en el cliente
-        const { data: areaData } = await supabase
-          .from("areas")
-          .select("id")
-          .eq("nombre", decodedArea)
-          .single();
-
-        if (!areaData) { setLoading(false); return; }
-
-        const { data: temasReal } = await supabase
-          .from("temas")
-          .select(`
-            id, nombre, explicacion, orden,
-            retos ( id, titulo, descripcion, dificultad, xp_reward, problem, answer, category )
-          `)
-          .eq("area_id", areaData.id)
-          .order("orden");
-
-        setTemas(temasReal || []);
-
-        // Todos los reto_ids del área
-        const todosIds = (temasReal || []).flatMap(t => t.retos.map(r => r.id));
-
-        if (todosIds.length > 0) {
-          const { data: progData } = await supabase
-            .from("progreso")
-            .select("reto_id")
-            .eq("usuario_id", user.id)
-            .eq("completado", true)
-            .in("reto_id", todosIds);
-
-          setCompletados((progData || []).map(p => p.reto_id));
-        }
-
-        // Abrir el primer tema por defecto
-        if (temasReal?.length > 0) setExpandedTema(temasReal[0].id);
-
-      } catch (err) {
-        console.error("Error:", err);
-      } finally {
-        setLoading(false);
+      if (!areaData) { 
+        setLoading(false); 
+        return; 
       }
-    };
-    init();
-  }, [decodedArea]);
+
+      // Traer temas + retos (SIN category ❌)
+      const { data: temasReal } = await supabase
+        .from("temas")
+        .select(`
+          id, nombre, explicacion, orden,
+          retos ( id, titulo, descripcion, dificultad, xp_reward, problem, answer )
+        `)
+        .eq("area_id", areaData.id)
+        .order("orden");
+
+      setTemas(temasReal || []);
+
+      // IDs de retos
+      const todosIds = (temasReal || []).flatMap(t => t.retos.map(r => r.id));
+
+      if (todosIds.length > 0) {
+        const { data: progData } = await supabase
+          .from("progreso")
+          .select("reto_id")
+          .eq("usuario_id", user.id)
+          .eq("completado", true)
+          .in("reto_id", todosIds);
+
+        setCompletados((progData || []).map(p => p.reto_id));
+      }
+
+      if (temasReal?.length > 0) setExpandedTema(temasReal[0].id);
+
+    } catch (err) {
+      console.error("Error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  init();
+}, [decodedArea]);
 
   /* ── Limpiar interval al desmontar ── */
   useEffect(() => {
@@ -103,33 +96,32 @@ export default function Retos() {
 
   /* ── Iniciar reto (con lógica de memoria) ── */
   const handleIniciarReto = (reto) => {
-    setActiveChallenge(reto);
-    setUserAnswer("");
+  setActiveChallenge(reto);
+  setUserAnswer("");
 
-    // Detectar si es un reto de memoria por el área o la categoría del reto
-    const esMemoria =
-      decodedArea?.toLowerCase().includes("memoria") ||
-      reto.category?.toLowerCase().includes("memoria");
+  // Detectar solo por el área
+  const esMemoria =
+    decodedArea?.toLowerCase().includes("memoria");
 
-    if (esMemoria) {
-      const segundos = MEMORY_SECONDS[reto.dificultad] ?? 20;
-      setIsMemorizing(true);
-      setCountdown(segundos);
+  if (esMemoria) {
+    const segundos = MEMORY_SECONDS[reto.dificultad] ?? 20;
+    setIsMemorizing(true);
+    setCountdown(segundos);
 
-      // Intervalo que descuenta cada segundo
-      if (countdownRef.current) clearInterval(countdownRef.current);
-      countdownRef.current = setInterval(() => {
-        setCountdown(prev => {
-          if (prev <= 1) {
-            clearInterval(countdownRef.current);
-            setIsMemorizing(false);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-  };
+    if (countdownRef.current) clearInterval(countdownRef.current);
+
+    countdownRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current);
+          setIsMemorizing(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+};
 
   /* ── Cancelar reto ── */
   const handleCancelar = () => {
