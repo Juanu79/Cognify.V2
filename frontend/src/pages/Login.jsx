@@ -2,6 +2,7 @@
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import LogoP from "../assets/LogoP.png";
+import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
 
 export default function Login() {
@@ -29,27 +30,29 @@ export default function Login() {
   };
 
   const loginGoogle = async () => {
-  const { data } = await supabase.auth.signInWithOAuth({
+  const isNative = Capacitor.isNativePlatform();
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback",
-      skipBrowserRedirect: true
+      redirectTo: window.location.origin + "/auth/callback",
+      skipBrowserRedirect: isNative
     }
   });
-  if (data?.url) await Browser.open({ url: data.url });
+  if (error) { console.error(error); return; }
+  if (isNative && data?.url) await Browser.open({ url: data.url });
 };
 
   const loginGithub = async () => {
+  const isNative = Capacitor.isNativePlatform();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "github",
     options: {
-      redirectTo: "https://cognify-v2-ri9w-six.vercel.app/auth/callback",
-      skipBrowserRedirect: true
+      redirectTo: window.location.origin + "/auth/callback",
+      skipBrowserRedirect: isNative
     }
   });
-  if (data?.url) {
-    await Browser.open({ url: data.url });
-  }
+  if (error) { console.error(error); return; }
+  if (isNative && data?.url) await Browser.open({ url: data.url });
 };
 
   return (

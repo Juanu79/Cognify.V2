@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from "./lib/supabaseClient"; 
 
@@ -47,7 +47,11 @@ export default function App() {
     <Routes>
       <Route path="/" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
       <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
-      <Route path="/auth/callback" element={<Navigate to="/dashboard" />} />
+      <Route path="/auth/callback" element={
+       user ? <Navigate to="/dashboard" /> : (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <p>Iniciando sesión...</p>
+      </div>)} />
       <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/" />} />
       <Route path="/areas" element={user ? <Areas /> : <Navigate to="/" />} />
       <Route path="/retos/:area" element={user ? <Retos /> : <Navigate to="/" />} />
