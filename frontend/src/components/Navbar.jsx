@@ -316,8 +316,6 @@ export default function Navbar() {
                     </div>
                     <Link to="/profile"  className="dd-item" onClick={() => setShowMenu(false)}>👤 Perfil</Link>
                     <Link to="/progreso" className="dd-item" onClick={() => setShowMenu(false)}>📊 Mi Progreso</Link>
-                    <Link to="/ranking"  className="dd-item" onClick={() => setShowMenu(false)}>🏆 Ranking</Link>
-                    <Link to="/history"  className="dd-item" onClick={() => setShowMenu(false)}>📋 Historial</Link>
                     <div className="dd-divider" />
                     <button className="dd-item logout" onClick={handleLogout}>🚪 Cerrar sesión</button>
                   </div>
@@ -356,8 +354,7 @@ export default function Navbar() {
               <div className="mobile-user-info">
                 Conectado como <strong>{user.email}</strong>
               </div>
-              <Link to="/profile"  className="mobile-link" onClick={() => setMobileOpen(false)}>👤 Perfil</Link>
-              <Link to="/history"  className="mobile-link" onClick={() => setMobileOpen(false)}>📋 Historial</Link>
+              <Link to="/profile" className="mobile-link" onClick={() => setMobileOpen(false)}>👤 Perfil</Link>
               <div className="mobile-divider" />
               <button className="mobile-logout" onClick={handleLogout}>🚪 Cerrar sesión</button>
             </>

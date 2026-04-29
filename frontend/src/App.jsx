@@ -9,7 +9,6 @@ import Areas from "./pages/Areas";
 import Retos from "./pages/Retos";
 import Progreso from "./pages/Progreso";
 import Profile from "./pages/Profile";
-import History from "./pages/History";
 import Salas from "./pages/Salas";
 
 export default function App() {
@@ -57,7 +56,6 @@ export default function App() {
       <Route path="/retos/:area" element={user ? <Retos /> : <Navigate to="/" />} />
       <Route path="/progreso" element={user ? <Progreso /> : <Navigate to="/" />} />
       <Route path="/profile" element={user ? <Profile /> : <Navigate to="/" />} />
-      <Route path="/history" element={user ? <History /> : <Navigate to="/" />} />
       <Route path="/salas" element={user ? <Salas user={user} /> : <Navigate to="/" />} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
