@@ -42,6 +42,9 @@ export default function Salas() {
   const timerTotalRef = useRef(null);
   const canalRef      = useRef(null);
   const canalSalaRef  = useRef(null);
+  const [isMemorizing, setIsMemorizing] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const countdownRef = useRef(null);
 
   // ── Cargar usuario ──
   useEffect(() => {
@@ -57,10 +60,33 @@ export default function Salas() {
     return () => limpiarTimers();
   }, []);
 
-  const limpiarTimers = () => {
-    clearInterval(timerRef.current);
-    clearInterval(timerTotalRef.current);
-  };
+ const limpiarTimers = () => {
+  clearInterval(timerRef.current);
+  clearInterval(timerTotalRef.current);
+  clearInterval(countdownRef.current); // 👈 IMPORTANTE
+};
+  
+  const MEMORY_SECONDS = { "Fácil": 25, "Media": 20, "Difícil": 10 };
+  const iniciarMemoria = (reto) => {
+  if (!reto) return;
+  const segundos = MEMORY_SECONDS[reto.dificultad] ?? 15;
+
+  setIsMemorizing(true);
+  setCountdown(segundos);
+
+  if (countdownRef.current) clearInterval(countdownRef.current);
+
+  countdownRef.current = setInterval(() => {
+    setCountdown(prev => {
+      if (prev <= 1) {
+        clearInterval(countdownRef.current);
+        setIsMemorizing(false);
+        return 0;
+      }
+      return prev - 1;
+    });
+  }, 1000);
+};
 
   // ── Suscripciones Realtime ──
   const suscribir = (salaId) => {
@@ -128,18 +154,27 @@ export default function Salas() {
 
   // ── Cargar retos y empezar juego ──
   const cargarRetosYEmpezar = async (salaId, areaId) => {
-    const { data: salaData } = await obtenerSala(salaId);
-    const areaNombre = salaData?.areas?.nombre || areaSeleccion;
-    const { data: retosData } = await obtenerRetosParaSala(areaNombre, MAX_RETOS);
-    setRetos(retosData);
-    setRetoIdx(0);
-    setPuntaje(0);
-    setTiempoTotal(0);
-    setTerminado(false);
-    setPantalla("jugando");
-    iniciarTimers();
-  };
+  const { data: salaData } = await obtenerSala(salaId);
+  const areaNombre = salaData?.areas?.nombre || areaSeleccion;
 
+  const { data: retosData } = await obtenerRetosParaSala(areaNombre, MAX_RETOS);
+
+  setRetos(retosData);
+  setRetoIdx(0);
+  setPuntaje(0);
+  setTiempoTotal(0);
+  setTerminado(false);
+  setPantalla("jugando");
+
+  // 👇 DETECTAR MEMORIA
+  const esMemoria = areaNombre.toLowerCase().includes("memoria");
+
+  if (esMemoria) {
+    iniciarMemoria(retosData[0]);
+  }
+
+  iniciarTimers();
+};
   const iniciarTimers = () => {
     limpiarTimers();
     setTiempoReto(TIEMPO_LIMITE);
@@ -181,6 +216,12 @@ export default function Salas() {
       setRetoIdx(siguiente);
       setTiempoReto(TIEMPO_LIMITE);
     }
+    const areaNombre = sala?.areas?.nombre || areaSeleccion;
+    const esMemoria = areaNombre.toLowerCase().includes("memoria");
+
+if (esMemoria) {
+  iniciarMemoria(retos[siguiente]);
+}
   };
 
   const finalizarJuego = async () => {
@@ -601,23 +642,39 @@ export default function Salas() {
               <>
                 <div className="reto-card-game">
                   <p className="reto-num">Reto {retoIdx + 1} de {retos.length}</p>
-                  <p className="reto-preg">{retos[retoIdx]?.problem}</p>
+                 {isMemorizing ? (
+  <>
+    <p className="reto-preg">{retos[retoIdx]?.problem}</p>
+    <p style={{ color:"#7c3aed", fontSize:"0.9rem", marginTop:"8px" }}>
+      🧠 Memoriza... {countdown}s
+    </p>
+  </>
+) : (
+  <p style={{ color:"#94a3b8" }}>
+    🧠 Escribe la respuesta de memoria
+  </p>
+)}
                 </div>
 
                 <div className="respuesta-wrap">
                   <input
-                    className={`game-input${feedbackOk === true ? " ok" : feedbackOk === false ? " fail" : ""}`}
-                    type="text"
-                    value={respuesta}
-                    onChange={e => setRespuesta(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && handleVerificar()}
-                    placeholder="Tu respuesta..."
-                    autoFocus
-                  />
-                  <button className="btn-primary" onClick={handleVerificar}
-                    disabled={!respuesta.trim()}>
-                    ✓
-                  </button>
+               className={`game-input${feedbackOk === true ? " ok" : feedbackOk === false ? " fail" : ""}`}
+  type="text"
+  value={respuesta}
+  onChange={e => setRespuesta(e.target.value)}
+  onKeyDown={e => e.key === "Enter" && handleVerificar()}
+  placeholder="Tu respuesta..."
+  autoFocus
+  disabled={isMemorizing} // 👈 AGREGA ESTO
+/>
+                  
+               <button
+  className="btn-primary"
+  onClick={handleVerificar}
+  disabled={!respuesta.trim() || isMemorizing} // 👈 AGREGA ESTO
+>
+  ✓
+</button>
                 </div>
               </>
             ) : (
