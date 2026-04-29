@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import Navbar from "../components/Navbar";
@@ -7,6 +7,9 @@ const DIFF_ORDER  = { "Fácil": 1, "Media": 2, "Difícil": 3 };
 const DIFF_COLORS = { "Fácil": "#10b981", "Media": "#f59e0b", "Difícil": "#ef4444" };
 const DIFF_BG     = { "Fácil": "#d1fae5", "Media": "#fef3c7", "Difícil": "#fee2e2" };
 const DIFF_TEXT   = { "Fácil": "#065f46", "Media": "#92400e", "Difícil": "#991b1b" };
+
+// ── Segundos por dificultad para memorizar ──
+const MEMORY_SECONDS = { "Fácil": 25, "Media": 20, "Difícil": 10 };
 
 export default function Retos() {
   const { area } = useParams();
@@ -24,6 +27,11 @@ export default function Retos() {
   const [submitting,      setSubmitting]      = useState(false);
   const [expandedTema,    setExpandedTema]    = useState(null);
 
+  // ── Nuevos estados para el timer de memoria ──
+  const [isMemorizing,    setIsMemorizing]    = useState(false);
+  const [countdown,       setCountdown]       = useState(0);
+  const countdownRef = useRef(null);
+
   /* ── Cargar datos ── */
   useEffect(() => {
     const init = async () => {
@@ -37,7 +45,7 @@ export default function Retos() {
           .from("temas")
           .select(`
             id, nombre, explicacion, orden,
-            retos ( id, titulo, descripcion, dificultad, xp_reward, problem, answer )
+            retos ( id, titulo, descripcion, dificultad, xp_reward, problem, answer, category )
           `)
           .eq("area_id", `(SELECT id FROM areas WHERE nombre = '${decodedArea}')`)
           .order("orden");
@@ -55,7 +63,7 @@ export default function Retos() {
           .from("temas")
           .select(`
             id, nombre, explicacion, orden,
-            retos ( id, titulo, descripcion, dificultad, xp_reward, problem, answer )
+            retos ( id, titulo, descripcion, dificultad, xp_reward, problem, answer, category )
           `)
           .eq("area_id", areaData.id)
           .order("orden");
@@ -87,6 +95,50 @@ export default function Retos() {
     };
     init();
   }, [decodedArea]);
+
+  /* ── Limpiar interval al desmontar ── */
+  useEffect(() => {
+    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
+  }, []);
+
+  /* ── Iniciar reto (con lógica de memoria) ── */
+  const handleIniciarReto = (reto) => {
+    setActiveChallenge(reto);
+    setUserAnswer("");
+
+    // Detectar si es un reto de memoria por el área o la categoría del reto
+    const esMemoria =
+      decodedArea?.toLowerCase().includes("memoria") ||
+      reto.category?.toLowerCase().includes("memoria");
+
+    if (esMemoria) {
+      const segundos = MEMORY_SECONDS[reto.dificultad] ?? 20;
+      setIsMemorizing(true);
+      setCountdown(segundos);
+
+      // Intervalo que descuenta cada segundo
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      countdownRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownRef.current);
+            setIsMemorizing(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+  };
+
+  /* ── Cancelar reto ── */
+  const handleCancelar = () => {
+    setActiveChallenge(null);
+    setUserAnswer("");
+    setIsMemorizing(false);
+    setCountdown(0);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+  };
 
   /* ── Verificar si un nivel está bloqueado ── */
   const isLocked = (tema, dificultad) => {
@@ -149,6 +201,9 @@ export default function Retos() {
       setTimeout(() => setShowSuccess(null), 3000);
       setActiveChallenge(null);
       setUserAnswer("");
+      setIsMemorizing(false);
+      setCountdown(0);
+      if (countdownRef.current) clearInterval(countdownRef.current);
 
     } catch (err) {
       console.error("Error guardando progreso:", err);
@@ -158,10 +213,10 @@ export default function Retos() {
   };
 
   /* ── Stats globales ── */
-  const todosRetos    = temas.flatMap(t => t.retos || []);
-  const totalRetos    = todosRetos.length;
+  const todosRetos       = temas.flatMap(t => t.retos || []);
+  const totalRetos       = todosRetos.length;
   const totalCompletados = completados.length;
-  const pctGlobal     = totalRetos > 0 ? Math.round((totalCompletados / totalRetos) * 100) : 0;
+  const pctGlobal        = totalRetos > 0 ? Math.round((totalCompletados / totalRetos) * 100) : 0;
 
   if (loading) return (
     <>
@@ -181,10 +236,11 @@ export default function Retos() {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #0f1117; font-family: 'Poppins', sans-serif; }
 
-        @keyframes spin    { to { transform: rotate(360deg); } }
-        @keyframes fadeUp  { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes shake   { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
-        @keyframes pop     { 0%{transform:scale(0.95)} 60%{transform:scale(1.03)} 100%{transform:scale(1)} }
+        @keyframes spin      { to { transform: rotate(360deg); } }
+        @keyframes fadeUp    { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes shake     { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+        @keyframes pop       { 0%{transform:scale(0.95)} 60%{transform:scale(1.03)} 100%{transform:scale(1)} }
+        @keyframes countdown { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 113; } }
 
         .fade-in { animation: fadeUp 0.45s ease both; }
 
@@ -255,6 +311,11 @@ export default function Retos() {
           transition: color 0.2s;
         }
         .btn-back:hover { color: #fff; }
+
+        /* ── Timer de memoria ── */
+        .memory-timer-ring circle.track  { fill: none; stroke: #e2e8f0; stroke-width: 4; }
+        .memory-timer-ring circle.fill   { fill: none; stroke-width: 4; stroke-linecap: round;
+          stroke-dasharray: 113; transform: rotate(-90deg); transform-origin: 50% 50%; }
       `}</style>
 
       <Navbar />
@@ -390,6 +451,12 @@ export default function Retos() {
                           const done     = completados.includes(reto.id);
                           const isActive = activeChallenge?.id === reto.id;
 
+                          // Calcular el porcentaje del arco SVG para el countdown
+                          const totalSeg   = MEMORY_SECONDS[reto.dificultad] ?? 20;
+                          const pctTimer   = isActive && isMemorizing ? countdown / totalSeg : 1;
+                          const dashOffset = 113 - (113 * pctTimer); // 113 = circunferencia (2π×18)
+                          const timerColor = countdown > 10 ? "#10b981" : countdown > 5 ? "#f59e0b" : "#ef4444";
+
                           return (
                             <div
                               key={reto.id}
@@ -420,27 +487,65 @@ export default function Retos() {
                               {/* Zona de resolución */}
                               {isActive ? (
                                 <div style={solverBox}>
-                                  <p style={problemTxt}>{reto.problem}</p>
+
+                                  {/* ── Fase memorizar: enunciado + countdown ── */}
+                                  {isMemorizing ? (
+                                    <div>
+                                      {/* Anillo de countdown */}
+                                      <div style={{ display:"flex", alignItems:"center", gap:"12px", marginBottom:"12px" }}>
+                                        <svg className="memory-timer-ring" width="40" height="40" viewBox="0 0 40 40">
+                                          <circle className="track" cx="20" cy="20" r="18"/>
+                                          <circle
+                                            className="fill"
+                                            cx="20" cy="20" r="18"
+                                            stroke={timerColor}
+                                            strokeDashoffset={dashOffset}
+                                          />
+                                          <text
+                                            x="20" y="20"
+                                            textAnchor="middle"
+                                            dominantBaseline="central"
+                                            style={{ fontSize:"11px", fontWeight:"700", fill: timerColor, fontFamily:"Poppins,sans-serif" }}
+                                          >
+                                            {countdown}
+                                          </text>
+                                        </svg>
+                                        <span style={{ fontSize:"0.8rem", color:"#7c3aed", fontWeight:"600" }}>
+                                          Memoriza el enunciado
+                                        </span>
+                                      </div>
+
+                                      {/* Enunciado visible solo mientras memoriza */}
+                                      <p style={problemTxt}>{reto.problem}</p>
+                                    </div>
+                                  ) : (
+                                    /* ── Fase responder: enunciado oculto ── */
+                                    <p style={{ ...problemTxt, color:"#94a3b8", fontSize:"0.85rem", marginBottom:"14px" }}>
+                                      🧠 ¿Recuerdas? Escribe tu respuesta.
+                                    </p>
+                                  )}
+
                                   <input
                                     className={`answer-input${showError ? " shake" : ""}`}
                                     type="text"
                                     value={userAnswer}
                                     onChange={e => setUserAnswer(e.target.value)}
-                                    onKeyDown={e => e.key === "Enter" && handleVerify(reto)}
+                                    onKeyDown={e => e.key === "Enter" && !isMemorizing && handleVerify(reto)}
                                     placeholder="Escribe tu respuesta..."
-                                    autoFocus
+                                    autoFocus={!isMemorizing}
+                                    disabled={isMemorizing}
                                   />
                                   <div style={{ display:"flex", gap:"10px" }}>
                                     <button
                                       className="btn-verify"
                                       onClick={() => handleVerify(reto)}
-                                      disabled={submitting || !userAnswer.trim()}
+                                      disabled={submitting || !userAnswer.trim() || isMemorizing}
                                     >
-                                      {submitting ? "Verificando..." : "✓ Verificar"}
+                                      {submitting ? "Verificando..." : isMemorizing ? "Memoriza..." : "✓ Verificar"}
                                     </button>
                                     <button
                                       className="btn-cancel"
-                                      onClick={() => { setActiveChallenge(null); setUserAnswer(""); }}
+                                      onClick={handleCancelar}
                                     >
                                       Cancelar
                                     </button>
@@ -450,7 +555,7 @@ export default function Retos() {
                                 <button
                                   className="btn-start"
                                   style={done || locked ? { background:"#94a3b8", boxShadow:"none", cursor:"not-allowed", opacity:0.7 } : {}}
-                                  onClick={() => !done && !locked && setActiveChallenge(reto)}
+                                  onClick={() => !done && !locked && handleIniciarReto(reto)}
                                   disabled={done || locked}
                                 >
                                   {done ? "✅ Completado" : locked ? "🔒 Bloqueado" : "Iniciar Reto →"}
