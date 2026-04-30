@@ -20,7 +20,10 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Crear cliente Supabase
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-// Mensaje opcional para confirmar conexión
-console.log("✅ Supabase conectado correctamente");
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    flowType: 'implicit',
+    detectSessionInUrl: true,
+    persistSession: true,
+  }
+});
