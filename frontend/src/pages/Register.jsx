@@ -15,10 +15,8 @@ export default function Register() {
   const [success, setSuccess] = useState(false);
 
   const navigate = useNavigate();
-
-  const navigate = useNavigate();
-
-useEffect(() => {
+  
+  useEffect(() => {
   if (!Capacitor.isNativePlatform()) return;
 
   const listener = App.addListener('appUrlOpen', async ({ url }) => {
