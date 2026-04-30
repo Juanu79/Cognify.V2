@@ -11,12 +11,10 @@ import {
 const AREAS = ["Matemáticas", "Lógica", "Programación", "Memoria"];
 const AREA_ICONS = { "Matemáticas":"📐", "Lógica":"🧩", "Programación":"💻", "Memoria":"🧠" };
 const MAX_RETOS = 5;
-const TIEMPO_LIMITE = 120; // segundos por reto
+const TIEMPO_LIMITE = 120;
+const MEMORIA_SEGUNDOS = 15; // segundos para memorizar en modo sala
 
-// ── Pantallas posibles ──
-// "inicio" | "lobby" | "jugando" | "resultado"
-
-export default function Salas() {
+export default function Salas({ user: userProp }) {
   const [user,          setUser]          = useState(null);
   const [userName,      setUserName]      = useState("");
   const [pantalla,      setPantalla]      = useState("inicio");
@@ -38,13 +36,16 @@ export default function Salas() {
   const [terminado,     setTerminado]     = useState(false);
   const [resultado,     setResultado]     = useState(null);
 
+  // Memoria
+  const [esAreaMemoria,   setEsAreaMemoria]   = useState(false);
+  const [isMemorizing,    setIsMemorizing]    = useState(false);
+  const [memoriaCountdown, setMemoriaCountdown] = useState(0);
+  const memoriaTimerRef = useRef(null);
+
   const timerRef      = useRef(null);
   const timerTotalRef = useRef(null);
   const canalRef      = useRef(null);
   const canalSalaRef  = useRef(null);
-  const [isMemorizing, setIsMemorizing] = useState(false);
-  const [countdown, setCountdown] = useState(0);
-  const countdownRef = useRef(null);
 
   // ── Cargar usuario ──
   useEffect(() => {
@@ -63,6 +64,7 @@ export default function Salas() {
   const limpiarTimers = () => {
     clearInterval(timerRef.current);
     clearInterval(timerTotalRef.current);
+    clearInterval(memoriaTimerRef.current);
   };
 
   // ── Suscripciones Realtime ──
@@ -120,8 +122,6 @@ export default function Salas() {
   const handleListo = async () => {
     if (!sala) return;
     await marcarListo(sala.id, user.id);
-
-    // Si soy el creador y hay 2+ jugadores, inicio la partida
     if (sala.creador_id === user.id) {
       const { data: jug } = await obtenerJugadores(sala.id);
       const todosListos = jug.length >= 2 && jug.every(j => j.listo);
@@ -134,6 +134,10 @@ export default function Salas() {
     const { data: salaData } = await obtenerSala(salaId);
     const areaNombre = salaData?.areas?.nombre || areaSeleccion;
     const { data: retosData } = await obtenerRetosParaSala(areaNombre, MAX_RETOS);
+
+    const esMemoria = areaNombre.toLowerCase().includes("memoria");
+    setEsAreaMemoria(esMemoria);
+
     setRetos(retosData);
     setRetoIdx(0);
     setPuntaje(0);
@@ -141,11 +145,28 @@ export default function Salas() {
     setTerminado(false);
     setPantalla("jugando");
     iniciarTimers();
-    
-    const esMemoria = areaNombre.toLowerCase().includes("memoria");
+
     if (esMemoria) {
-      iniciarMemoria(retosData[0]);
-}
+      iniciarFaseMemoria();
+    }
+  };
+
+  // ── Fase de memorización (15s para ambos jugadores) ──
+  const iniciarFaseMemoria = () => {
+    clearInterval(memoriaTimerRef.current);
+    setIsMemorizing(true);
+    setMemoriaCountdown(MEMORIA_SEGUNDOS);
+
+    memoriaTimerRef.current = setInterval(() => {
+      setMemoriaCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(memoriaTimerRef.current);
+          setIsMemorizing(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   const iniciarTimers = () => {
@@ -164,7 +185,7 @@ export default function Salas() {
 
   // ── Verificar respuesta ──
   const handleVerificar = async () => {
-    if (!respuesta.trim() || !retos[retoIdx]) return;
+    if (!respuesta.trim() || !retos[retoIdx] || isMemorizing) return;
     const correcto = respuesta.trim().toLowerCase() ===
                      retos[retoIdx].answer.trim().toLowerCase();
 
@@ -178,16 +199,21 @@ export default function Salas() {
     }
 
     setRespuesta("");
-    pasarReto(correcto);
+    await pasarReto();
   };
 
-  const pasarReto = async (correcto = false) => {
+  const pasarReto = async () => {
     const siguiente = retoIdx + 1;
     if (siguiente >= retos.length) {
       await finalizarJuego();
     } else {
       setRetoIdx(siguiente);
       setTiempoReto(TIEMPO_LIMITE);
+
+      // Si es área de memoria, iniciar fase de memorización para el siguiente reto
+      if (esAreaMemoria) {
+        iniciarFaseMemoria();
+      }
     }
   };
 
@@ -196,7 +222,6 @@ export default function Salas() {
     setTerminado(true);
     await marcarTerminado(sala.id, user.id, puntaje);
 
-    // Verificar si todos terminaron
     setTimeout(async () => {
       const { data: jug } = await obtenerJugadores(sala.id);
       const todosTerminaron = jug.every(j => j.terminado);
@@ -223,6 +248,7 @@ export default function Salas() {
     setSala(null); setJugadores([]);
     setRetos([]); setRetoIdx(0); setPuntaje(0);
     setTiempoTotal(0); setTerminado(false); setResultado(null);
+    setEsAreaMemoria(false); setIsMemorizing(false); setMemoriaCountdown(0);
     setPantalla("inicio");
   };
 
@@ -235,7 +261,10 @@ export default function Salas() {
   const yoJugador = jugadores.find(j => j.usuario_id === user?.id);
   const esCreador = sala?.creador_id === user?.id;
 
-  // ════════════════════════════════════════════════════
+  // Color del countdown de memoria
+  const memoriaColor = memoriaCountdown > 10 ? "#10b981" : memoriaCountdown > 5 ? "#f59e0b" : "#ef4444";
+  const memoriaDashOffset = 113 - (113 * (memoriaCountdown / MEMORIA_SEGUNDOS));
+
   return (
     <>
       <style>{`
@@ -250,7 +279,6 @@ export default function Salas() {
 
         .salas-wrap { max-width: 900px; margin: 0 auto; padding: 100px 24px 80px; }
 
-        /* ── Botones generales ── */
         .btn-primary {
           display: inline-flex; align-items: center; gap: 8px;
           background: linear-gradient(135deg,#7c3aed,#6d28d9);
@@ -282,7 +310,6 @@ export default function Salas() {
         }
         .btn-danger:hover { background: #fecaca; }
 
-        /* ── Input ── */
         .sala-input {
           width: 100%; padding: 14px 16px;
           background: #1e293b; border: 2px solid #334155;
@@ -293,7 +320,6 @@ export default function Salas() {
         .sala-input:focus { border-color: #7c3aed; }
         .sala-input::placeholder { color: #475569; }
 
-        /* ── Error toast ── */
         .error-toast {
           background: #fee2e2; color: #991b1b;
           padding: 12px 16px; border-radius: 10px;
@@ -302,7 +328,6 @@ export default function Salas() {
           animation: fadeUp 0.3s ease;
         }
 
-        /* ══ INICIO ══ */
         .inicio-header { text-align: center; margin-bottom: 48px; animation: fadeUp 0.5s ease both; }
         .inicio-header h1 { font-size: 2.6rem; font-weight: 800; color: #f1f5f9; margin-bottom: 8px; }
         .inicio-header p  { color: #94a3b8; font-size: 1rem; }
@@ -326,7 +351,6 @@ export default function Salas() {
         }
         .area-select:focus { border-color: #7c3aed; }
 
-        /* ══ LOBBY ══ */
         .lobby-wrap { animation: fadeUp 0.5s ease both; }
         .lobby-header { text-align: center; margin-bottom: 32px; }
         .lobby-header h1 { font-size: 2rem; font-weight: 800; color: #f1f5f9; margin-bottom: 8px; }
@@ -368,7 +392,6 @@ export default function Salas() {
 
         .lobby-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 
-        /* ══ JUGANDO ══ */
         .game-wrap { animation: fadeUp 0.4s ease both; }
 
         .game-header {
@@ -390,6 +413,29 @@ export default function Salas() {
         .timer-box span { color: #94a3b8; font-size: 0.75rem; display: block; }
         .timer-val { font-size: 1.4rem; font-weight: 800; }
 
+        /* ── Banner de memoria ── */
+        .memoria-banner {
+          background: linear-gradient(135deg, #1a1f2e, #0f1117);
+          border: 2px solid #7c3aed;
+          border-radius: 16px; padding: 20px 24px;
+          margin-bottom: 20px;
+          display: flex; align-items: center; gap: 20px;
+          animation: fadeUp 0.3s ease;
+        }
+        .memoria-banner-text h3 { color: #a78bfa; font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; }
+        .memoria-banner-text p  { color: #f1f5f9; font-size: 1rem; font-weight: 700; line-height: 1.5; }
+
+        .memoria-timer-ring circle.track { fill: none; stroke: #334155; stroke-width: 4; }
+        .memoria-timer-ring circle.fill  { fill: none; stroke-width: 4; stroke-linecap: round;
+          stroke-dasharray: 113; transform: rotate(-90deg); transform-origin: 50% 50%; }
+
+        /* ── Fase responder ── */
+        .responder-hint {
+          background: #1a1f2e; border: 1px solid #334155;
+          border-radius: 12px; padding: 14px 18px; margin-bottom: 16px;
+          color: #94a3b8; font-size: 0.9rem; text-align: center;
+        }
+
         .reto-card-game {
           background: #fff; border-radius: 20px; padding: 32px;
           margin-bottom: 20px; box-shadow: 0 8px 32px rgba(0,0,0,0.2);
@@ -408,6 +454,7 @@ export default function Salas() {
         .game-input:focus { border-color: #7c3aed; }
         .game-input.ok    { border-color: #10b981; animation: pulse 0.4s ease; }
         .game-input.fail  { border-color: #ef4444; animation: shake 0.35s ease; }
+        .game-input:disabled { opacity: 0.4; cursor: not-allowed; }
 
         .progreso-retos { display: flex; gap: 8px; margin-bottom: 20px; }
         .reto-dot {
@@ -417,7 +464,6 @@ export default function Salas() {
         .reto-dot.done    { background: #7c3aed; }
         .reto-dot.current { background: #a78bfa; }
 
-        /* Marcador rival en vivo */
         .rival-bar {
           background: #1a1f2e; border-radius: 14px; padding: 14px 20px;
           display: flex; align-items: center; gap: 14px; margin-bottom: 20px;
@@ -426,7 +472,6 @@ export default function Salas() {
         .rival-bar span { color: #94a3b8; font-size: 0.85rem; }
         .rival-bar strong { color: #f1f5f9; font-weight: 700; }
 
-        /* ══ RESULTADO ══ */
         .result-wrap { text-align: center; animation: fadeUp 0.5s ease both; }
         .result-wrap h1 { font-size: 2.2rem; font-weight: 800; color: #f1f5f9; margin-bottom: 8px; }
         .result-wrap > p { color: #94a3b8; margin-bottom: 32px; }
@@ -459,7 +504,6 @@ export default function Salas() {
             {error && <div className="error-toast">{error}</div>}
 
             <div className="inicio-grid">
-              {/* Crear sala */}
               <div className="panel-card">
                 <h2>➕ Crear sala</h2>
                 <p>Crea una sala y comparte el código con un amigo.</p>
@@ -478,7 +522,6 @@ export default function Salas() {
                 </button>
               </div>
 
-              {/* Unirse a sala */}
               <div className="panel-card">
                 <h2>🔑 Unirse a sala</h2>
                 <p>Ingresa el código que te compartió tu compañero.</p>
@@ -512,13 +555,11 @@ export default function Salas() {
               </p>
             </div>
 
-            {/* Código */}
             <div className="codigo-box">
               <p>Comparte este código con tu rival</p>
               <h2>{sala.codigo}</h2>
             </div>
 
-            {/* Jugadores */}
             <div className="jugadores-grid">
               {jugadores.map(j => (
                 <div className="jugador-card" key={j.id}>
@@ -540,9 +581,7 @@ export default function Salas() {
                 </div>
               ))}
               {jugadores.length < 2 && (
-                <div className="slot-vacio">
-                  ⏳ Esperando rival...
-                </div>
+                <div className="slot-vacio">⏳ Esperando rival...</div>
               )}
             </div>
 
@@ -572,14 +611,12 @@ export default function Salas() {
         {pantalla === "jugando" && retos.length > 0 && (
           <div className="game-wrap">
 
-            {/* Header con scores */}
             <div className="game-header">
               <div className="game-score-box">
                 <span>Tu puntaje</span>
                 <strong>{puntaje}/{MAX_RETOS}</strong>
               </div>
 
-              {/* Rival en vivo */}
               {jugadores.filter(j => j.usuario_id !== user?.id).map(rival => (
                 <div className="rival-bar" key={rival.id} style={{ flex:1, margin:"0 12px" }}>
                   <span>
@@ -604,13 +641,59 @@ export default function Salas() {
               ))}
             </div>
 
-            {/* Reto actual */}
             {!terminado ? (
               <>
-                <div className="reto-card-game">
-                  <p className="reto-num">Reto {retoIdx + 1} de {retos.length}</p>
-                  <p className="reto-preg">{retos[retoIdx]?.problem}</p>
-                </div>
+                {/* ── Área de Memoria: fase memorizar ── */}
+                {esAreaMemoria && isMemorizing && (
+                  <div className="memoria-banner">
+                    <svg className="memoria-timer-ring" width="56" height="56" viewBox="0 0 40 40" style={{ flexShrink:0 }}>
+                      <circle className="track" cx="20" cy="20" r="18"/>
+                      <circle
+                        className="fill"
+                        cx="20" cy="20" r="18"
+                        stroke={memoriaColor}
+                        strokeDashoffset={memoriaDashOffset}
+                      />
+                      <text
+                        x="20" y="20"
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        style={{ fontSize:"11px", fontWeight:"800", fill: memoriaColor, fontFamily:"Poppins,sans-serif" }}
+                      >
+                        {memoriaCountdown}
+                      </text>
+                    </svg>
+                    <div className="memoria-banner-text">
+                      <h3>🧠 ¡Memoriza este reto! Tienes {memoriaCountdown}s</h3>
+                      <p>{retos[retoIdx]?.problem}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Área de Memoria: fase responder ── */}
+                {esAreaMemoria && !isMemorizing && (
+                  <div className="responder-hint">
+                    🧠 El enunciado fue ocultado. ¿Recuerdas la respuesta?
+                  </div>
+                )}
+
+                {/* ── Reto normal (no memoria) ── */}
+                {!esAreaMemoria && (
+                  <div className="reto-card-game">
+                    <p className="reto-num">Reto {retoIdx + 1} de {retos.length}</p>
+                    <p className="reto-preg">{retos[retoIdx]?.problem}</p>
+                  </div>
+                )}
+
+                {/* ── Número de reto para memoria (fase responder) ── */}
+                {esAreaMemoria && !isMemorizing && (
+                  <div className="reto-card-game" style={{ marginBottom:"16px" }}>
+                    <p className="reto-num">Reto {retoIdx + 1} de {retos.length}</p>
+                    <p className="reto-preg" style={{ color:"#94a3b8", fontSize:"1rem" }}>
+                      Escribe lo que recuerdas...
+                    </p>
+                  </div>
+                )}
 
                 <div className="respuesta-wrap">
                   <input
@@ -619,12 +702,16 @@ export default function Salas() {
                     value={respuesta}
                     onChange={e => setRespuesta(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleVerificar()}
-                    placeholder="Tu respuesta..."
-                    autoFocus
+                    placeholder={isMemorizing ? "Espera... memoriza el enunciado" : "Tu respuesta..."}
+                    autoFocus={!isMemorizing}
+                    disabled={isMemorizing}
                   />
-                  <button className="btn-primary" onClick={handleVerificar}
-                    disabled={!respuesta.trim()}>
-                    ✓
+                  <button
+                    className="btn-primary"
+                    onClick={handleVerificar}
+                    disabled={!respuesta.trim() || isMemorizing}
+                  >
+                    {isMemorizing ? "⏳" : "✓"}
                   </button>
                 </div>
               </>
@@ -656,9 +743,7 @@ export default function Salas() {
                     </p>
                     <p className="podio-puntaje">{j.puntaje}/{MAX_RETOS} correctos</p>
                   </div>
-                  <span className="podio-tiempo">
-                    {i === 0 ? "¡Ganador!" : ""}
-                  </span>
+                  <span className="podio-tiempo">{i === 0 ? "¡Ganador!" : ""}</span>
                 </div>
               ))}
             </div>
