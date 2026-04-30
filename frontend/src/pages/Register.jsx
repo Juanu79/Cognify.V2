@@ -16,29 +16,27 @@ export default function Register() {
 
   const navigate = useNavigate();
   
-  useEffect(() => {
+ useEffect(() => {
   if (!Capacitor.isNativePlatform()) return;
 
-  const listener = App.addListener('appUrlOpen', async ({ url }) => {
-    if (url.includes('auth/callback')) {
-      await Browser.close();
-      
-      // Esperar a que Supabase procese el token
-      const { data: { session } } = await supabase.auth.exchangeCodeForSession(url);
-      if (session) {
-        navigate('/dashboard');
-        return;
-      }
-
-      // Si no funciona exchangeCodeForSession, intentar getSession
-      setTimeout(async () => {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) navigate('/dashboard');
-      }, 1000);
+  // Escuchar cambios de sesión de Supabase
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      navigate('/dashboard');
     }
   });
 
-  return () => { listener.then(l => l.remove()); };
+  // Cerrar browser cuando vuelva el deep link
+  const listener = App.addListener('appUrlOpen', async ({ url }) => {
+    if (url.includes('auth/callback')) {
+      await Browser.close();
+    }
+  });
+
+  return () => {
+    subscription.unsubscribe();
+    listener.then(l => l.remove());
+  };
 }, []);
 
   const handleRegister = async (e) => {
