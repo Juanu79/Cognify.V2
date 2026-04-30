@@ -19,24 +19,20 @@ export default function Register() {
  useEffect(() => {
   if (!Capacitor.isNativePlatform()) return;
 
-  // Escuchar cambios de sesión de Supabase
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' && session) {
-      navigate('/dashboard');
-    }
-  });
-
-  // Cerrar browser cuando vuelva el deep link
-  const listener = App.addListener('appUrlOpen', async ({ url }) => {
-    if (url.includes('auth/callback')) {
-      await Browser.close();
-    }
-  });
-
-  return () => {
-    subscription.unsubscribe();
-    listener.then(l => l.remove());
+  const handleResume = async () => {
+    await Browser.close();
+    // Esperar un momento para que Supabase procese
+    setTimeout(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) navigate('/dashboard');
+    }, 1500);
   };
+
+  const listener = App.addListener('appStateChange', ({ isActive }) => {
+    if (isActive) handleResume();
+  });
+
+  return () => { listener.then(l => l.remove()); };
 }, []);
 
   const handleRegister = async (e) => {

@@ -18,24 +18,20 @@ export default function Login() {
  useEffect(() => {
   if (!Capacitor.isNativePlatform()) return;
 
-  console.log('Listener registrado');
-
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    console.log('Auth event:', event, 'Session:', session);
-    if (event === 'SIGNED_IN' && session) {
-      navigate('/dashboard');
-    }
-  });
-
-  const listener = App.addListener('appUrlOpen', async ({ url }) => {
-    console.log('URL recibida:', url);
+  const handleResume = async () => {
     await Browser.close();
+    // Esperar un momento para que Supabase procese
+    setTimeout(async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) navigate('/dashboard');
+    }, 1500);
+  };
+
+  const listener = App.addListener('appStateChange', ({ isActive }) => {
+    if (isActive) handleResume();
   });
 
-  return () => {
-    subscription.unsubscribe();
-    listener.then(l => l.remove());
-  };
+  return () => { listener.then(l => l.remove()); };
 }, []);
 
   const handleSubmit = async (e) => {
@@ -58,7 +54,7 @@ export default function Login() {
   const redirectTo = isNative
   ? 'cognify://auth/callback'
   : window.location.origin + '/auth/callback';
-  
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo, skipBrowserRedirect: isNative }
