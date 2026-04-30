@@ -1,9 +1,10 @@
-﻿import React, { useState } from "react";
+﻿import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import LogoP from "../assets/LogoP.png";
 import { Capacitor } from '@capacitor/core';
 import { Browser } from '@capacitor/browser';
+import { App } from '@capacitor/app';
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -13,6 +14,22 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+  if (!Capacitor.isNativePlatform()) return;
+
+  const listener = App.addListener('appUrlOpen', async ({ url }) => {
+    if (url.includes('auth/callback')) {
+      await Browser.close();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) navigate('/dashboard');
+    }
+  });
+
+  return () => { listener.then(l => l.remove()); };
+}, []);
+
+  
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,27 +46,29 @@ export default function Login() {
     }
   };
 
-  const loginGoogle = async () => {
+ const loginGoogle = async () => {
   const isNative = Capacitor.isNativePlatform();
+  const redirectTo = isNative
+    ? 'com.cognify.app://auth/callback'
+    : window.location.origin + '/auth/callback';
+
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: window.location.origin + "/auth/callback",
-      skipBrowserRedirect: isNative
-    }
+    provider: 'google',
+    options: { redirectTo, skipBrowserRedirect: isNative }
   });
   if (error) { console.error(error); return; }
   if (isNative && data?.url) await Browser.open({ url: data.url });
 };
 
-  const loginGithub = async () => {
+const loginGithub = async () => {
   const isNative = Capacitor.isNativePlatform();
+  const redirectTo = isNative
+    ? 'com.cognify.app://auth/callback'
+    : window.location.origin + '/auth/callback';
+
   const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "github",
-    options: {
-      redirectTo: window.location.origin + "/auth/callback",
-      skipBrowserRedirect: isNative
-    }
+    provider: 'github',
+    options: { redirectTo, skipBrowserRedirect: isNative }
   });
   if (error) { console.error(error); return; }
   if (isNative && data?.url) await Browser.open({ url: data.url });
