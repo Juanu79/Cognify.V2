@@ -56,9 +56,9 @@ export default function Login() {
  const loginGoogle = async () => {
   const isNative = Capacitor.isNativePlatform();
   const redirectTo = isNative
-    ? 'com.cognify.app://auth/callback'
-    : window.location.origin + '/auth/callback';
-
+  ? 'cognify://auth/callback'
+  : window.location.origin + '/auth/callback';
+  
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo, skipBrowserRedirect: isNative }

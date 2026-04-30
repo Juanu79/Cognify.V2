@@ -55,8 +55,8 @@ export default function Register() {
 const loginGoogle = async () => {
   const isNative = Capacitor.isNativePlatform();
   const redirectTo = isNative
-    ? 'com.cognify.app://auth/callback'
-    : window.location.origin + '/auth/callback';
+  ? 'cognify://auth/callback'
+  : window.location.origin + '/auth/callback';
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -68,9 +68,9 @@ const loginGoogle = async () => {
 
 const loginGithub = async () => {
   const isNative = Capacitor.isNativePlatform();
-  const redirectTo = isNative
-    ? 'com.cognify.app://auth/callback'
-    : window.location.origin + '/auth/callback';
+ const redirectTo = isNative
+  ? 'cognify://auth/callback'
+  : window.location.origin + '/auth/callback';
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'github',
