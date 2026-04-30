@@ -22,8 +22,19 @@ export default function Register() {
   const listener = App.addListener('appUrlOpen', async ({ url }) => {
     if (url.includes('auth/callback')) {
       await Browser.close();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) navigate('/dashboard');
+      
+      // Esperar a que Supabase procese el token
+      const { data: { session } } = await supabase.auth.exchangeCodeForSession(url);
+      if (session) {
+        navigate('/dashboard');
+        return;
+      }
+
+      // Si no funciona exchangeCodeForSession, intentar getSession
+      setTimeout(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) navigate('/dashboard');
+      }, 1000);
     }
   });
 
