@@ -3,22 +3,19 @@ import { useParams, Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import Navbar from "../components/Navbar";
 
-const DIFF_ORDER  = { "Fácil": 1, "Media": 2, "Difícil": 3 };
 const DIFF_COLORS = { "Fácil": "#10b981", "Media": "#f59e0b", "Difícil": "#ef4444" };
 const DIFF_BG     = { "Fácil": "#d1fae5", "Media": "#fef3c7", "Difícil": "#fee2e2" };
 const DIFF_TEXT   = { "Fácil": "#065f46", "Media": "#92400e", "Difícil": "#991b1b" };
-
-// ── Segundos por dificultad para memorizar ──
 const MEMORY_SECONDS = { "Fácil": 25, "Media": 20, "Difícil": 10 };
 
 export default function Retos() {
   const { area } = useParams();
   const decodedArea = area ? decodeURIComponent(area) : null;
+  const esMemoria   = decodedArea?.toLowerCase().includes("memoria");
 
   const [temas,           setTemas]           = useState([]);
   const [completados,     setCompletados]     = useState([]);
   const [activeChallenge, setActiveChallenge] = useState(null);
-  const [activeTema,      setActiveTema]      = useState(null);
   const [userAnswer,      setUserAnswer]      = useState("");
   const [showSuccess,     setShowSuccess]     = useState(null);
   const [showError,       setShowError]       = useState(false);
@@ -26,113 +23,127 @@ export default function Retos() {
   const [userId,          setUserId]          = useState(null);
   const [submitting,      setSubmitting]      = useState(false);
   const [expandedTema,    setExpandedTema]    = useState(null);
-
-  // ── Nuevos estados para el timer de memoria ──
   const [isMemorizing,    setIsMemorizing]    = useState(false);
   const [countdown,       setCountdown]       = useState(0);
+
   const countdownRef = useRef(null);
 
+  // ── Cargar datos ──
   useEffect(() => {
-  const init = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      setUserId(user.id);
+    const init = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        setUserId(user.id);
 
-      // Obtener ID del área
-      const { data: areaData } = await supabase
-        .from("areas")
-        .select("id")
-        .eq("nombre", decodedArea)
-        .single();
+        const { data: areaData } = await supabase
+          .from("areas")
+          .select("id")
+          .eq("nombre", decodedArea)
+          .single();
 
-      if (!areaData) { 
-        setLoading(false); 
-        return; 
+        if (!areaData) { setLoading(false); return; }
+
+        const { data: temasReal } = await supabase
+          .from("temas")
+          .select(`
+            id, nombre, explicacion, orden,
+            retos ( id, titulo, descripcion, dificultad, xp_reward, problem, answer )
+          `)
+          .eq("area_id", areaData.id)
+          .order("orden");
+
+        setTemas(temasReal || []);
+
+        const todosIds = (temasReal || []).flatMap(t => t.retos.map(r => r.id));
+
+        if (todosIds.length > 0) {
+          const { data: progData } = await supabase
+            .from("progreso")
+            .select("reto_id")
+            .eq("usuario_id", user.id)
+            .eq("completado", true)
+            .in("reto_id", todosIds);
+          setCompletados((progData || []).map(p => p.reto_id));
+        }
+
+        if (temasReal?.length > 0) setExpandedTema(temasReal[0].id);
+
+      } catch (err) {
+        console.error("Error:", err);
+      } finally {
+        setLoading(false);
       }
+    };
+    init();
+  }, [decodedArea]);
 
-      // Traer temas + retos (SIN category ❌)
-      const { data: temasReal } = await supabase
-        .from("temas")
-        .select(`
-          id, nombre, explicacion, orden,
-          retos ( id, titulo, descripcion, dificultad, xp_reward, problem, answer )
-        `)
-        .eq("area_id", areaData.id)
-        .order("orden");
+  // ── Reset al cambiar de área ──
+  useEffect(() => {
+    setIsMemorizing(false);
+    setCountdown(0);
+    setActiveChallenge(null);
+    setUserAnswer("");
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+  }, [decodedArea]);
 
-      setTemas(temasReal || []);
+  // ── Limpiar timer al desmontar ──
+  useEffect(() => {
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, []);
 
-      // IDs de retos
-      const todosIds = (temasReal || []).flatMap(t => t.retos.map(r => r.id));
+  // ── Iniciar reto ──
+  const handleIniciarReto = (reto) => {
+    // Limpiar cualquier timer anterior
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+    setIsMemorizing(false);
+    setCountdown(0);
+    setUserAnswer("");
+    setShowError(false);
+    setActiveChallenge(reto);
 
-      if (todosIds.length > 0) {
-        const { data: progData } = await supabase
-          .from("progreso")
-          .select("reto_id")
-          .eq("usuario_id", user.id)
-          .eq("completado", true)
-          .in("reto_id", todosIds);
+    // Solo activar timer si es área de Memoria
+    if (esMemoria) {
+      const segundos = MEMORY_SECONDS[reto.dificultad] ?? 20;
+      setIsMemorizing(true);
+      setCountdown(segundos);
 
-        setCompletados((progData || []).map(p => p.reto_id));
-      }
-
-      if (temasReal?.length > 0) setExpandedTema(temasReal[0].id);
-
-    } catch (err) {
-      console.error("Error:", err);
-    } finally {
-      setLoading(false);
+      countdownRef.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(countdownRef.current);
+            countdownRef.current = null;
+            setIsMemorizing(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
   };
 
-  init();
-}, [decodedArea]);
-
-  /* ── Limpiar interval al desmontar ── */
-  useEffect(() => {
-    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
-  }, []);
-
-  /* ── Iniciar reto (con lógica de memoria) ── */
-  const handleIniciarReto = (reto) => {
-  setActiveChallenge(reto);
-  setUserAnswer("");
-
-  // Detectar solo por el área
-  const esMemoria =
-    decodedArea?.toLowerCase().includes("memoria");
-
-  if (esMemoria) {
-    const segundos = MEMORY_SECONDS[reto.dificultad] ?? 20;
-    setIsMemorizing(true);
-    setCountdown(segundos);
-
-    if (countdownRef.current) clearInterval(countdownRef.current);
-
-    countdownRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(countdownRef.current);
-          setIsMemorizing(false);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  }
-};
-
-  /* ── Cancelar reto ── */
+  // ── Cancelar reto ──
   const handleCancelar = () => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
     setActiveChallenge(null);
     setUserAnswer("");
     setIsMemorizing(false);
     setCountdown(0);
-    if (countdownRef.current) clearInterval(countdownRef.current);
+    setShowError(false);
   };
 
-  /* ── Verificar si un nivel está bloqueado ── */
+  // ── Sistema de bloqueo corregido ──
   const isLocked = (tema, dificultad) => {
     if (dificultad === "Fácil") return false;
 
@@ -140,16 +151,25 @@ export default function Retos() {
 
     if (dificultad === "Media") {
       const facilesDelTema = retosDelTema.filter(r => r.dificultad === "Fácil");
+      if (facilesDelTema.length === 0) return false; // sin fáciles = no bloquear
       return !facilesDelTema.every(r => completados.includes(r.id));
     }
+
     if (dificultad === "Difícil") {
       const mediasDelTema = retosDelTema.filter(r => r.dificultad === "Media");
+      // Si no hay medios, verificar fáciles directamente
+      if (mediasDelTema.length === 0) {
+        const facilesDelTema = retosDelTema.filter(r => r.dificultad === "Fácil");
+        if (facilesDelTema.length === 0) return false;
+        return !facilesDelTema.every(r => completados.includes(r.id));
+      }
       return !mediasDelTema.every(r => completados.includes(r.id));
     }
+
     return false;
   };
 
-  /* ── Verificar respuesta ── */
+  // ── Verificar respuesta ──
   const handleVerify = async (reto) => {
     const correct = userAnswer.trim().toLowerCase() === reto.answer.trim().toLowerCase();
 
@@ -191,11 +211,16 @@ export default function Retos() {
       setCompletados(prev => [...prev, reto.id]);
       setShowSuccess(`¡Correcto! +${reto.xp_reward} XP 🎉`);
       setTimeout(() => setShowSuccess(null), 3000);
+
+      // Limpiar estado
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
       setActiveChallenge(null);
       setUserAnswer("");
       setIsMemorizing(false);
       setCountdown(0);
-      if (countdownRef.current) clearInterval(countdownRef.current);
 
     } catch (err) {
       console.error("Error guardando progreso:", err);
@@ -204,7 +229,7 @@ export default function Retos() {
     }
   };
 
-  /* ── Stats globales ── */
+  // ── Stats globales ──
   const todosRetos       = temas.flatMap(t => t.retos || []);
   const totalRetos       = todosRetos.length;
   const totalCompletados = completados.length;
@@ -228,15 +253,12 @@ export default function Retos() {
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #0f1117; font-family: 'Poppins', sans-serif; }
 
-        @keyframes spin      { to { transform: rotate(360deg); } }
-        @keyframes fadeUp    { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes shake     { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
-        @keyframes pop       { 0%{transform:scale(0.95)} 60%{transform:scale(1.03)} 100%{transform:scale(1)} }
-        @keyframes countdown { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 113; } }
+        @keyframes spin   { to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes shake  { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
 
         .fade-in { animation: fadeUp 0.45s ease both; }
 
-        /* ── Tema accordion ── */
         .tema-header {
           display: flex; align-items: center; justify-content: space-between;
           padding: 20px 24px; cursor: pointer;
@@ -244,7 +266,6 @@ export default function Retos() {
         }
         .tema-header:hover { background: rgba(124,58,237,0.06); }
 
-        /* ── Reto card ── */
         .reto-card {
           background: #fff; border-radius: 16px;
           padding: 24px; transition: transform 0.25s, box-shadow 0.25s;
@@ -256,7 +277,6 @@ export default function Retos() {
         }
         .reto-card.locked { opacity: 0.55; }
 
-        /* ── Inputs & buttons ── */
         .answer-input {
           width: 100%; padding: 12px 14px;
           border: 2px solid #e2e8f0; border-radius: 10px;
@@ -299,24 +319,23 @@ export default function Retos() {
         .btn-back {
           display: inline-flex; align-items: center; gap: 6px;
           color: #a78bfa; text-decoration: none; font-weight: 600;
-          font-size: 0.92rem; margin-bottom: 28px;
-          transition: color 0.2s;
+          font-size: 0.92rem; margin-bottom: 28px; transition: color 0.2s;
         }
         .btn-back:hover { color: #fff; }
 
-        /* ── Timer de memoria ── */
-        .memory-timer-ring circle.track  { fill: none; stroke: #e2e8f0; stroke-width: 4; }
-        .memory-timer-ring circle.fill   { fill: none; stroke-width: 4; stroke-linecap: round;
-          stroke-dasharray: 113; transform: rotate(-90deg); transform-origin: 50% 50%; }
+        .memory-timer-ring circle.track { fill: none; stroke: #e2e8f0; stroke-width: 4; }
+        .memory-timer-ring circle.fill  {
+          fill: none; stroke-width: 4; stroke-linecap: round;
+          stroke-dasharray: 113;
+          transform: rotate(-90deg); transform-origin: 50% 50%;
+        }
       `}</style>
 
       <Navbar />
 
       <div style={wrap}>
 
-        <Link to="/areas" className="btn-back">
-          ← Volver a Áreas
-        </Link>
+        <Link to="/areas" className="btn-back">← Volver a Áreas</Link>
 
         {/* ── Header ── */}
         <div style={headerBox} className="fade-in">
@@ -324,8 +343,6 @@ export default function Retos() {
           <p style={pageSub}>
             Completa los retos por tema. Desbloquea niveles superiores superando los anteriores.
           </p>
-
-          {/* Progreso global */}
           <div style={globalProgress}>
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:"8px" }}>
               <span style={{ color:"#94a3b8", fontSize:"0.85rem" }}>
@@ -340,16 +357,17 @@ export default function Retos() {
         </div>
 
         {/* ── Toasts ── */}
-        {showSuccess && <div style={toastOk} className="fade-in">{showSuccess}</div>}
+        {showSuccess && <div style={toastOk}  className="fade-in">{showSuccess}</div>}
         {showError   && <div style={toastErr} className="fade-in">❌ Respuesta incorrecta. ¡Inténtalo de nuevo!</div>}
 
-        {/* ── Temas ── */}
+        {/* ── Sin temas ── */}
         {temas.length === 0 && (
           <div style={emptyBox}>
             <p style={{ fontSize:"1.1rem", color:"#94a3b8" }}>🚧 Aún no hay temas para esta área.</p>
           </div>
         )}
 
+        {/* ── Temas ── */}
         {temas.map((tema, tIdx) => {
           const retosDelTema = tema.retos || [];
           const compTema     = retosDelTema.filter(r => completados.includes(r.id)).length;
@@ -357,10 +375,9 @@ export default function Retos() {
             ? Math.round((compTema / retosDelTema.length) * 100) : 0;
           const isOpen       = expandedTema === tema.id;
 
-          // Agrupar por dificultad en orden
           const porDiff = ["Fácil","Media","Difícil"].map(diff => ({
             diff,
-            retos: retosDelTema.filter(r => r.dificultad === diff),
+            retos:  retosDelTema.filter(r => r.dificultad === diff),
             locked: isLocked(tema, diff),
           })).filter(g => g.retos.length > 0);
 
@@ -368,33 +385,25 @@ export default function Retos() {
             <div key={tema.id} style={temaBox} className="fade-in">
 
               {/* Header del tema */}
-              <div
-                className="tema-header"
-                onClick={() => setExpandedTema(isOpen ? null : tema.id)}
-              >
+              <div className="tema-header"
+                onClick={() => setExpandedTema(isOpen ? null : tema.id)}>
                 <div style={{ display:"flex", alignItems:"center", gap:"14px" }}>
                   <div style={temaNum}>{tIdx + 1}</div>
                   <div>
                     <h2 style={temaNombre}>{tema.nombre}</h2>
-                    <p style={temaMeta}>
-                      {compTema}/{retosDelTema.length} retos completados
-                    </p>
+                    <p style={temaMeta}>{compTema}/{retosDelTema.length} retos completados</p>
                   </div>
                 </div>
                 <div style={{ display:"flex", alignItems:"center", gap:"16px" }}>
-                  {/* Mini progress */}
                   <div style={{ textAlign:"right" }}>
-                    <span style={{ color:"#7c3aed", fontWeight:"700", fontSize:"0.9rem" }}>
-                      {pctTema}%
-                    </span>
+                    <span style={{ color:"#7c3aed", fontWeight:"700", fontSize:"0.9rem" }}>{pctTema}%</span>
                     <div style={{ ...progBg, width:"80px", marginTop:"4px" }}>
                       <div style={{ ...progFill, width:`${pctTema}%` }} />
                     </div>
                   </div>
-                  <span style={{ color:"#94a3b8", fontSize:"1.2rem", transition:"transform 0.3s",
-                    transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
-                    ▾
-                  </span>
+                  <span style={{ color:"#94a3b8", fontSize:"1.2rem",
+                    transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition:"transform 0.3s", display:"inline-block" }}>▾</span>
                 </div>
               </div>
 
@@ -402,7 +411,7 @@ export default function Retos() {
               {isOpen && (
                 <div style={{ padding:"0 24px 28px" }}>
 
-                  {/* Explicación del tema */}
+                  {/* Explicación */}
                   <div style={explBox}>
                     <div style={explHeader}>
                       <span style={explIcon}>📖</span>
@@ -415,17 +424,13 @@ export default function Retos() {
                   {porDiff.map(({ diff, retos: retosGrupo, locked }) => (
                     <div key={diff} style={{ marginBottom:"28px" }}>
 
-                      {/* Encabezado del nivel */}
                       <div style={diffHeader}>
                         <div style={{ display:"flex", alignItems:"center", gap:"10px" }}>
                           <span style={{
-                            background: DIFF_BG[diff],
-                            color: DIFF_TEXT[diff],
+                            background: DIFF_BG[diff], color: DIFF_TEXT[diff],
                             padding:"4px 14px", borderRadius:"20px",
                             fontSize:"0.82rem", fontWeight:"700"
-                          }}>
-                            {diff}
-                          </span>
+                          }}>{diff}</span>
                           {locked && (
                             <span style={lockBadge}>
                               🔒 Completa los retos {diff === "Media" ? "Fáciles" : "Medios"} para desbloquear
@@ -437,16 +442,15 @@ export default function Retos() {
                         </span>
                       </div>
 
-                      {/* Grid de retos */}
                       <div style={retosGrid}>
                         {retosGrupo.map(reto => {
                           const done     = completados.includes(reto.id);
                           const isActive = activeChallenge?.id === reto.id;
 
-                          // Calcular el porcentaje del arco SVG para el countdown
+                          // Timer SVG para memoria
                           const totalSeg   = MEMORY_SECONDS[reto.dificultad] ?? 20;
                           const pctTimer   = isActive && isMemorizing ? countdown / totalSeg : 1;
-                          const dashOffset = 113 - (113 * pctTimer); // 113 = circunferencia (2π×18)
+                          const dashOffset = 113 - (113 * pctTimer);
                           const timerColor = countdown > 10 ? "#10b981" : countdown > 5 ? "#f59e0b" : "#ef4444";
 
                           return (
@@ -458,10 +462,7 @@ export default function Retos() {
                                 borderTop: `3px solid ${DIFF_COLORS[reto.dificultad]}`,
                               }}
                             >
-                              {/* Badge completado */}
-                              {done && (
-                                <div style={doneBadge}>✅ Completado</div>
-                              )}
+                              {done && <div style={doneBadge}>✅ Completado</div>}
 
                               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"12px" }}>
                                 <span style={{
@@ -476,45 +477,43 @@ export default function Retos() {
                               <h3 style={retoTitle}>{reto.titulo}</h3>
                               <p style={retoDesc}>{reto.descripcion}</p>
 
-                              {/* Zona de resolución */}
+                              {/* ── Zona de resolución ── */}
                               {isActive ? (
                                 <div style={solverBox}>
 
-                                  {/* ── Fase memorizar: enunciado + countdown ── */}
-                                  {isMemorizing ? (
-                                    <div>
-                                      {/* Anillo de countdown */}
-                                      <div style={{ display:"flex", alignItems:"center", gap:"12px", marginBottom:"12px" }}>
-                                        <svg className="memory-timer-ring" width="40" height="40" viewBox="0 0 40 40">
-                                          <circle className="track" cx="20" cy="20" r="18"/>
-                                          <circle
-                                            className="fill"
-                                            cx="20" cy="20" r="18"
-                                            stroke={timerColor}
-                                            strokeDashoffset={dashOffset}
-                                          />
-                                          <text
-                                            x="20" y="20"
-                                            textAnchor="middle"
-                                            dominantBaseline="central"
-                                            style={{ fontSize:"11px", fontWeight:"700", fill: timerColor, fontFamily:"Poppins,sans-serif" }}
-                                          >
-                                            {countdown}
-                                          </text>
-                                        </svg>
-                                        <span style={{ fontSize:"0.8rem", color:"#7c3aed", fontWeight:"600" }}>
-                                          Memoriza el enunciado
-                                        </span>
+                                  {/* ── Área Memoria: mostrar enunciado + timer ── */}
+                                  {esMemoria ? (
+                                    isMemorizing ? (
+                                      <div>
+                                        <div style={{ display:"flex", alignItems:"center", gap:"12px", marginBottom:"12px" }}>
+                                          <svg className="memory-timer-ring" width="40" height="40" viewBox="0 0 40 40">
+                                            <circle className="track" cx="20" cy="20" r="18"/>
+                                            <circle
+                                              className="fill"
+                                              cx="20" cy="20" r="18"
+                                              stroke={timerColor}
+                                              strokeDashoffset={dashOffset}
+                                            />
+                                            <text x="20" y="20" textAnchor="middle" dominantBaseline="central"
+                                              style={{ fontSize:"11px", fontWeight:"700", fill:timerColor, fontFamily:"Poppins,sans-serif" }}>
+                                              {countdown}
+                                            </text>
+                                          </svg>
+                                          <span style={{ fontSize:"0.8rem", color:"#7c3aed", fontWeight:"600" }}>
+                                            Memoriza el enunciado
+                                          </span>
+                                        </div>
+                                        <p style={problemTxt}>{reto.problem}</p>
                                       </div>
-
-                                      {/* Enunciado visible solo mientras memoriza */}
-                                      <p style={problemTxt}>{reto.problem}</p>
-                                    </div>
+                                    ) : (
+                                      /* Fase responder: enunciado oculto */
+                                      <p style={{ ...problemTxt, color:"#94a3b8", fontSize:"0.85rem", marginBottom:"14px" }}>
+                                        🧠 ¿Recuerdas? Escribe tu respuesta.
+                                      </p>
+                                    )
                                   ) : (
-                                    /* ── Fase responder: enunciado oculto ── */
-                                    <p style={{ ...problemTxt, color:"#94a3b8", fontSize:"0.85rem", marginBottom:"14px" }}>
-                                      🧠 ¿Recuerdas? Escribe tu respuesta.
-                                    </p>
+                                    /* ── Otras áreas: siempre mostrar enunciado ── */
+                                    <p style={problemTxt}>{reto.problem}</p>
                                   )}
 
                                   <input
@@ -527,6 +526,7 @@ export default function Retos() {
                                     autoFocus={!isMemorizing}
                                     disabled={isMemorizing}
                                   />
+
                                   <div style={{ display:"flex", gap:"10px" }}>
                                     <button
                                       className="btn-verify"
@@ -535,10 +535,7 @@ export default function Retos() {
                                     >
                                       {submitting ? "Verificando..." : isMemorizing ? "Memoriza..." : "✓ Verificar"}
                                     </button>
-                                    <button
-                                      className="btn-cancel"
-                                      onClick={handleCancelar}
-                                    >
+                                    <button className="btn-cancel" onClick={handleCancelar}>
                                       Cancelar
                                     </button>
                                   </div>
@@ -546,7 +543,9 @@ export default function Retos() {
                               ) : (
                                 <button
                                   className="btn-start"
-                                  style={done || locked ? { background:"#94a3b8", boxShadow:"none", cursor:"not-allowed", opacity:0.7 } : {}}
+                                  style={done || locked
+                                    ? { background:"#94a3b8", boxShadow:"none", cursor:"not-allowed", opacity:0.7 }
+                                    : {}}
                                   onClick={() => !done && !locked && handleIniciarReto(reto)}
                                   disabled={done || locked}
                                 >
@@ -581,45 +580,34 @@ export default function Retos() {
 }
 
 /* ── ESTILOS ── */
-const loadWrap   = { display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", gap:"16px", background:"#0f1117" };
-const spinnerEl  = { width:"44px", height:"44px", border:"4px solid #7c3aed", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite" };
-
-const wrap       = { maxWidth:"1100px", margin:"0 auto", padding:"100px 24px 80px", fontFamily:"'Poppins',sans-serif" };
-
-const headerBox  = { marginBottom:"40px" };
-const pageTitle  = { fontSize:"2.4rem", fontWeight:"800", color:"#f1f5f9", marginBottom:"8px" };
-const pageSub    = { color:"#94a3b8", fontSize:"0.95rem", marginBottom:"24px" };
-
-const globalProgress = { background:"#1e293b", borderRadius:"12px", padding:"16px 20px" };
-const progBg     = { height:"8px", background:"#334155", borderRadius:"99px", overflow:"hidden" };
-const progFill   = { height:"100%", background:"linear-gradient(90deg,#7c3aed,#a78bfa)", borderRadius:"99px", transition:"width 0.6s ease" };
-
-const toastOk    = { background:"#d1fae5", borderLeft:"4px solid #10b981", color:"#065f46", padding:"12px 20px", borderRadius:"0 10px 10px 0", marginBottom:"20px", fontWeight:"600" };
-const toastErr   = { background:"#fee2e2", borderLeft:"4px solid #ef4444", color:"#991b1b", padding:"12px 20px", borderRadius:"0 10px 10px 0", marginBottom:"20px", fontWeight:"600" };
-
-const temaBox    = { background:"#1a1f2e", borderRadius:"20px", marginBottom:"20px", overflow:"hidden", border:"1px solid #1e293b" };
-const temaNum    = { width:"38px", height:"38px", borderRadius:"50%", background:"linear-gradient(135deg,#7c3aed,#6d28d9)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:"800", fontSize:"0.9rem", flexShrink:0 };
-const temaNombre = { fontSize:"1.1rem", fontWeight:"700", color:"#f1f5f9", marginBottom:"2px" };
-const temaMeta   = { fontSize:"0.78rem", color:"#64748b" };
-
-const explBox    = { background:"#0f1117", borderRadius:"14px", padding:"18px 20px", marginBottom:"24px", border:"1px solid #1e293b" };
-const explHeader = { display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px" };
-const explIcon   = { fontSize:"1.1rem" };
-const explText   = { color:"#94a3b8", fontSize:"0.92rem", lineHeight:"1.7" };
-
-const diffHeader = { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" };
-const lockBadge  = { background:"#1e293b", color:"#64748b", padding:"4px 12px", borderRadius:"20px", fontSize:"0.75rem", fontWeight:"600" };
-
-const retosGrid  = { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))", gap:"16px" };
-const doneBadge  = { position:"absolute", top:"12px", right:"12px", background:"#d1fae5", color:"#065f46", padding:"3px 10px", borderRadius:"20px", fontSize:"0.72rem", fontWeight:"700" };
-const xpTag      = { background:"#ede9fe", color:"#7c3aed", padding:"3px 10px", borderRadius:"20px", fontSize:"0.75rem", fontWeight:"700" };
-const retoTitle  = { fontSize:"1.1rem", fontWeight:"700", color:"#1e293b", marginBottom:"8px" };
-const retoDesc   = { color:"#475569", fontSize:"0.88rem", lineHeight:"1.6", marginBottom:"18px" };
-
-const solverBox  = { background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"16px" };
-const problemTxt = { color:"#1e293b", fontSize:"1rem", fontWeight:"600", marginBottom:"14px", lineHeight:"1.6" };
-
-const emptyBox   = { background:"#1a1f2e", borderRadius:"20px", padding:"48px", textAlign:"center" };
-
-const footerStyle = { borderTop:"1px solid #1e293b", paddingTop:"24px", marginTop:"40px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:"12px" };
-const footerLink  = { fontSize:"0.82rem", color:"#475569", textDecoration:"none" };
+const loadWrap      = { display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", height:"100vh", gap:"16px", background:"#0f1117" };
+const spinnerEl     = { width:"44px", height:"44px", border:"4px solid #7c3aed", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite" };
+const wrap          = { maxWidth:"1100px", margin:"0 auto", padding:"100px 24px 80px", fontFamily:"'Poppins',sans-serif" };
+const headerBox     = { marginBottom:"40px" };
+const pageTitle     = { fontSize:"2.4rem", fontWeight:"800", color:"#f1f5f9", marginBottom:"8px" };
+const pageSub       = { color:"#94a3b8", fontSize:"0.95rem", marginBottom:"24px" };
+const globalProgress= { background:"#1e293b", borderRadius:"12px", padding:"16px 20px" };
+const progBg        = { height:"8px", background:"#334155", borderRadius:"99px", overflow:"hidden" };
+const progFill      = { height:"100%", background:"linear-gradient(90deg,#7c3aed,#a78bfa)", borderRadius:"99px", transition:"width 0.6s ease" };
+const toastOk       = { background:"#d1fae5", borderLeft:"4px solid #10b981", color:"#065f46", padding:"12px 20px", borderRadius:"0 10px 10px 0", marginBottom:"20px", fontWeight:"600" };
+const toastErr      = { background:"#fee2e2", borderLeft:"4px solid #ef4444", color:"#991b1b", padding:"12px 20px", borderRadius:"0 10px 10px 0", marginBottom:"20px", fontWeight:"600" };
+const temaBox       = { background:"#1a1f2e", borderRadius:"20px", marginBottom:"20px", overflow:"hidden", border:"1px solid #1e293b" };
+const temaNum       = { width:"38px", height:"38px", borderRadius:"50%", background:"linear-gradient(135deg,#7c3aed,#6d28d9)", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:"800", fontSize:"0.9rem", flexShrink:0 };
+const temaNombre    = { fontSize:"1.1rem", fontWeight:"700", color:"#f1f5f9", marginBottom:"2px" };
+const temaMeta      = { fontSize:"0.78rem", color:"#64748b" };
+const explBox       = { background:"#0f1117", borderRadius:"14px", padding:"18px 20px", marginBottom:"24px", border:"1px solid #1e293b" };
+const explHeader    = { display:"flex", alignItems:"center", gap:"8px", marginBottom:"10px" };
+const explIcon      = { fontSize:"1.1rem" };
+const explText      = { color:"#94a3b8", fontSize:"0.92rem", lineHeight:"1.7" };
+const diffHeader    = { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"14px" };
+const lockBadge     = { background:"#1e293b", color:"#64748b", padding:"4px 12px", borderRadius:"20px", fontSize:"0.75rem", fontWeight:"600" };
+const retosGrid     = { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))", gap:"16px" };
+const doneBadge     = { position:"absolute", top:"12px", right:"12px", background:"#d1fae5", color:"#065f46", padding:"3px 10px", borderRadius:"20px", fontSize:"0.72rem", fontWeight:"700" };
+const xpTag         = { background:"#ede9fe", color:"#7c3aed", padding:"3px 10px", borderRadius:"20px", fontSize:"0.75rem", fontWeight:"700" };
+const retoTitle     = { fontSize:"1.1rem", fontWeight:"700", color:"#1e293b", marginBottom:"8px" };
+const retoDesc      = { color:"#475569", fontSize:"0.88rem", lineHeight:"1.6", marginBottom:"18px" };
+const solverBox     = { background:"#f8fafc", border:"1px solid #e2e8f0", borderRadius:"12px", padding:"16px" };
+const problemTxt    = { color:"#1e293b", fontSize:"1rem", fontWeight:"600", marginBottom:"14px", lineHeight:"1.6" };
+const emptyBox      = { background:"#1a1f2e", borderRadius:"20px", padding:"48px", textAlign:"center" };
+const footerStyle   = { borderTop:"1px solid #1e293b", paddingTop:"24px", marginTop:"40px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:"12px" };
+const footerLink    = { fontSize:"0.82rem", color:"#475569", textDecoration:"none" };
