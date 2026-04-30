@@ -18,18 +18,18 @@ export default function Login() {
  useEffect(() => {
   if (!Capacitor.isNativePlatform()) return;
 
-  // Escuchar cambios de sesión de Supabase
+  console.log('Listener registrado');
+
   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    console.log('Auth event:', event, 'Session:', session);
     if (event === 'SIGNED_IN' && session) {
       navigate('/dashboard');
     }
   });
 
-  // Cerrar browser cuando vuelva el deep link
   const listener = App.addListener('appUrlOpen', async ({ url }) => {
-    if (url.includes('auth/callback')) {
-      await Browser.close();
-    }
+    console.log('URL recibida:', url);
+    await Browser.close();
   });
 
   return () => {
