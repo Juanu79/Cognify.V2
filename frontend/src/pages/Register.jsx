@@ -16,23 +16,34 @@ export default function Register() {
 
   const navigate = useNavigate();
   
- useEffect(() => {
+useEffect(() => {
   if (!Capacitor.isNativePlatform()) return;
 
-  const handleResume = async () => {
-    await Browser.close();
-    // Esperar un momento para que Supabase procese
-    setTimeout(async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) navigate('/dashboard');
-    }, 1500);
-  };
+  console.log('=== NATIVE PLATFORM DETECTED ===');
 
-  const listener = App.addListener('appStateChange', ({ isActive }) => {
-    if (isActive) handleResume();
+  // Escuchar cambios de auth
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    console.log('=== AUTH STATE CHANGE ===', event, JSON.stringify(session));
+    if (event === 'SIGNED_IN' && session) {
+      console.log('=== NAVIGATING TO DASHBOARD ===');
+      navigate('/dashboard');
+    }
   });
 
-  return () => { listener.then(l => l.remove()); };
+  // Cerrar browser al volver
+  const listener = App.addListener('appStateChange', async ({ isActive }) => {
+    console.log('=== APP STATE CHANGE ===', isActive);
+    if (isActive) {
+      await Browser.close();
+      const { data } = await supabase.auth.getSession();
+      console.log('=== SESSION ===', JSON.stringify(data.session));
+    }
+  });
+
+  return () => {
+    subscription.unsubscribe();
+    listener.then(l => l.remove());
+  };
 }, []);
 
   const handleRegister = async (e) => {
