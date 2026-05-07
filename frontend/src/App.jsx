@@ -33,6 +33,29 @@ export default function App() {
   };
 
   useEffect(() => {
+  // Timeout de seguridad — si en 3s no dispara, quita el loading
+  const timeout = setTimeout(() => setLoading(false), 3000);
+
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    clearTimeout(timeout);
+    const currentUser = session?.user || null;
+    setUser(currentUser);
+    if (currentUser) {
+      const admin = await checkAdmin(currentUser.email);
+      setIsAdmin(admin);
+    } else {
+      setIsAdmin(false);
+    }
+    setLoading(false);
+  });
+
+  return () => {
+    clearTimeout(timeout);
+    subscription.unsubscribe();
+  };
+}, []);
+
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const currentUser = session?.user || null;
       setUser(currentUser);
@@ -80,3 +103,5 @@ export default function App() {
     </Routes>
   );
 }
+
+
