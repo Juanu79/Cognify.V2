@@ -225,20 +225,31 @@ const iniciarTimers = (area) => {
   });
 };
 
-  const finalizarJuego = async () => {
-    limpiarTimers();
-    setTerminado(true);
-    if (sala) await marcarTerminado(sala.id, user.id, puntaje);
-    setTimeout(async () => {
-      if (!sala) return;
-      const { data: jug } = await obtenerJugadores(sala.id);
-      const todosTerminaron = jug.every(j => j.terminado);
-      if (todosTerminaron) {
-        await terminarPartida(sala.id);
-        await cargarResultado(sala.id);
-      }
-    }, 2000);
-  };
+const finalizarJuego = async () => {
+  limpiarTimers();
+  setTerminado(true);
+  if (sala) await marcarTerminado(sala.id, user?.id, puntaje);
+
+  // Verificar cada 2 segundos si todos terminaron
+  const check = setInterval(async () => {
+    if (!sala) { clearInterval(check); return; }
+    const { data: jug } = await obtenerJugadores(sala.id);
+    const todosTerminaron = jug.every(j => j.terminado);
+    if (todosTerminaron) {
+      clearInterval(check);
+      await terminarPartida(sala.id);
+      await cargarResultado(sala.id);
+    }
+  }, 2000);
+
+  // Timeout máximo de 60 segundos
+  setTimeout(() => {
+    clearInterval(check);
+    if (sala) cargarResultado(sala.id);
+  }, 60000);
+};
+
+ 
 
   const cargarResultado = async (salaId) => {
     const { data: jug } = await obtenerJugadores(salaId);
