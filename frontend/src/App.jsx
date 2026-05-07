@@ -34,7 +34,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const inactivityTimer = useRef(null);
-  const userRef = useRef(null); // ref para acceder al user actual dentro de callbacks
+  const userRef         = useRef(null);
+  // Flag para saber si es la primera carga (restaurar sesión) o un login nuevo
+  const isInitialLoad   = useRef(true);
 
   /* ── Cerrar sesión ── */
   const logout = useCallback(async () => {
@@ -74,8 +76,12 @@ export default function App() {
         const admin = await checkAdmin(currentUser.email);
         setIsAdmin(admin);
         resetInactivityTimer();
+        // Marcar sesión activa al restaurar
+        localStorage.setItem(`cognify_session_${currentUser.id}`, Date.now().toString());
       }
       setLoading(false);
+      // Después de la carga inicial, los siguientes SIGNED_IN son logins reales
+      setTimeout(() => { isInitialLoad.current = false; }, 1000);
     };
 
     initSession();
@@ -83,22 +89,24 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       const currentUser = session?.user || null;
 
-      // ── Detectar sesión duplicada (mismo usuario, otra pestaña/dispositivo) ──
-      if (event === "SIGNED_IN" && currentUser) {
-        const sessionKey = `cognify_session_${currentUser.id}`;
+      // ── Detectar sesión duplicada ──
+      // Solo aplica en SIGNED_IN reales (no al restaurar sesión al abrir la pestaña)
+      if (event === "SIGNED_IN" && currentUser && !isInitialLoad.current) {
+        const sessionKey   = `cognify_session_${currentUser.id}`;
         const prevTimestamp = localStorage.getItem(sessionKey);
-        const now = Date.now();
+        const now           = Date.now();
 
-        if (prevTimestamp && now - parseInt(prevTimestamp) > 3000) {
-          // Otra sesión activa detectada → cerrar esta instancia
+        if (prevTimestamp && now - parseInt(prevTimestamp) > 5000) {
+          // Hay una sesión activa en otro lugar → cerrar esta
           localStorage.removeItem(sessionKey);
           await supabase.auth.signOut();
-          alert("⚠️ Tu sesión fue cerrada porque iniciaste sesión en otro lugar.");
+          alert("⚠️ Tu sesión fue cerrada porque iniciaste sesión en otro dispositivo o pestaña.");
           setUser(null);
           setIsAdmin(false);
           setLoading(false);
           return;
         }
+        // Actualizar timestamp de sesión activa
         localStorage.setItem(sessionKey, now.toString());
       }
 
