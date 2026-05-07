@@ -49,6 +49,8 @@ export default function Salas() {
   const canalRef      = useRef(null);
   const canalSalaRef  = useRef(null);
   const inputRef      = useRef(null);
+  const [mostrarEnunciado, setMostrarEnunciado] = useState(true);
+  const [countdownMemoria, setCountdownMemoria] = useState(0);
   const retoIdxRef = useRef(0);
 
   useEffect(() => {
@@ -142,6 +144,7 @@ export default function Salas() {
     const areaNombre = salaData?.areas?.nombre || "aleatorio";
     const cantidad   = salaData?.max_retos || maxRetos || 5;
     const { data: retosData } = await obtenerRetosOnline(areaNombre, cantidad);
+    iniciarMemoria(retosData[0], areaNombre);
     setRetos(retosData);
     setRetoIdx(0);
     setPuntaje(0);
@@ -152,7 +155,28 @@ export default function Salas() {
     setAreaActual(areaNombre);
     setPantalla("jugando");
     iniciarTimers(areaNombre);
+    setMostrarEnunciado(true);
+    setCountdownMemoria(0);
   };
+
+  const iniciarMemoria = (reto, area) => {
+  if (area?.toLowerCase().includes("memoria")) {
+    const segundos = 5;
+    setCountdownMemoria(segundos);
+    setMostrarEnunciado(true);
+    
+    const countdown = setInterval(() => {
+      setCountdownMemoria(prev => {
+        if (prev <= 1) {
+          clearInterval(countdown);
+          setMostrarEnunciado(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }
+};
 
 const tieneLimite = (area) => !AREAS_SIN_TIMER.includes(area);
 
@@ -194,16 +218,18 @@ const iniciarTimers = (area) => {
     pasarReto(correcto);
   };
 
-  const pasarReto = async (correcto = false) => {
-    resetTimerReto();
-    const siguiente = retoIdx + 1;
-    if (siguiente >= retos.length) {
-      await finalizarJuego();
-    } else {
-      setRetoIdx(siguiente);
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  };
+ const pasarReto = async (correcto = false) => {
+  resetTimerReto();
+  setMostrarEnunciado(true);
+  const siguiente = retoIdx + 1;
+  if (siguiente >= retos.length) {
+    await finalizarJuego();
+  } else {
+    setRetoIdx(siguiente);
+    iniciarMemoria(retos[siguiente], areaActual);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }
+};
 
   const pasarRetoTimer = () => {
   const siguiente = retoIdxRef.current + 1;
@@ -249,9 +275,7 @@ const finalizarJuego = async () => {
   }, 60000);
 };
 
- 
-
-  const cargarResultado = async (salaId) => {
+const cargarResultado = async (salaId) => {
     const { data: jug } = await obtenerJugadores(salaId);
     const { data: salaData } = await obtenerSala(salaId);
     const ordenados = [...jug].sort((a, b) => b.puntaje - a.puntaje);
@@ -730,7 +754,25 @@ const finalizarJuego = async () => {
                 <>
                   <div className={`game-card${feedbackOk === true ? " ok" : feedbackOk === false ? " fail" : ""}`}>
                     <p className="reto-num">Pregunta {retoIdx + 1} de {retos.length}</p>
-                    <p className="reto-preg">{retoActual?.problem}</p>
+                    {mostrarEnunciado ? (
+  <p className="reto-preg">
+    {retoActual?.problem}
+    {countdownMemoria > 0 && (
+      <span style={{
+        display: "block",
+        fontSize: "0.75rem",
+        color: "#f59e0b",
+        marginTop: "8px"
+      }}>
+        Memoriza en {countdownMemoria}s...
+      </span>
+    )}
+  </p>
+) : (
+  <p className="reto-preg" style={{ color: "#475569", fontStyle: "italic" }}>
+    🧠 ¡Recuerda lo que memorizaste!
+  </p>
+)}
                   </div>
                   <div className="answer-row">
                     <input
