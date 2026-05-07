@@ -356,7 +356,7 @@ export default function Dashboard() {
         {/* ══ HERO ══ */}
         <section className="hero fade1">
           <div className="hero-left">
-            <h1>¡Hola, {userName}! 👋</h1>
+            <h1>¡Hola, {userName}! </h1>
             <p>
               {stats.racha > 0
                 ? "Estás en racha. Sigue aprendiendo y alcanza nuevas metas."
@@ -367,7 +367,7 @@ export default function Dashboard() {
               <div className="streak-badge">
                 <span className="s-lbl">Racha activa</span>
                 <span className="s-val">
-                  {stats.racha > 0 ? `🔥 ${stats.racha} días` : "🌱 ¡Empieza hoy!"}
+                  {stats.racha > 0 ? ` ${stats.racha} días` : "🌱 ¡Empieza hoy!"}
                 </span>
               </div>
             </div>
@@ -445,12 +445,12 @@ export default function Dashboard() {
               <div>
                 {stats.racha >= 7 ? (
                   <>
-                    <h4>¡Logro desbloqueado! 🏆</h4>
-                    <p>Racha de {stats.racha} días 🔥</p>
+                    <h4>¡Logro desbloqueado! </h4>
+                    <p>Racha de {stats.racha} días </p>
                   </>
                 ) : stats.retos > 0 ? (
                   <>
-                    <h4>¡Sigue así! 💪</h4>
+                    <h4>¡Sigue así!</h4>
                     <p>{stats.retos} retos completados hasta ahora</p>
                   </>
                 ) : (

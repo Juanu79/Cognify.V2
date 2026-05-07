@@ -272,20 +272,20 @@ export default function Profile() {
             <span className="pf-provider">Login con: {provider}</span>
 
             <div className="pf-stat">
-              <div className="pf-stat-label">🏆 Retos Completados</div>
+              <div className="pf-stat-label"> Retos Completados</div>
               <div className="pf-stat-val">{stats.retos}</div>
             </div>
             <div className="pf-stat">
-              <div className="pf-stat-label">⚡ Racha Actual</div>
+              <div className="pf-stat-label">Racha Actual</div>
               <div className="pf-stat-val">{stats.racha} días</div>
             </div>
             <div className="pf-stat">
-              <div className="pf-stat-label">🎯 Puntos Totales</div>
+              <div className="pf-stat-label"> Puntos Totales</div>
               <div className="pf-stat-val">{stats.xp.toLocaleString()}</div>
             </div>
 
             <button className="btn-logout" onClick={handleLogout}>
-              🚪 Cerrar Sesión
+              Cerrar Sesión
             </button>
           </div>
 
@@ -303,18 +303,18 @@ export default function Profile() {
 
             <form onSubmit={handleSave}>
               <div className="pf-field">
-                <label>👤 Nombre de Usuario</label>
+                <label> Nombre de Usuario</label>
                 <input className="pf-input" type="text" value={nombre}
                   onChange={e => setNombre(e.target.value)} disabled={!editando} placeholder="Tu nombre" />
               </div>
 
               <div className="pf-field">
-                <label>✉️ Correo Electrónico</label>
+                <label>Correo Electrónico</label>
                 <input className="pf-input" type="email" value={email} disabled />
               </div>
 
               <div className="pf-field">
-                <label>📝 Biografía</label>
+                <label> Biografía</label>
                 <textarea className="pf-textarea" value={bio}
                   onChange={e => setBio(e.target.value.slice(0, 200))}
                   disabled={!editando} placeholder="Cuéntanos algo sobre ti..." />
@@ -324,7 +324,7 @@ export default function Profile() {
               {editando && (
                 <div className="pf-actions">
                   <button type="submit" className="btn-save" disabled={saving}>
-                    {saving ? "Guardando..." : "💾 Guardar Cambios"}
+                    {saving ? "Guardando..." : " Guardar Cambios"}
                   </button>
                   <button type="button" className="btn-cancel-edit"
                     onClick={() => setEditando(false)}>Cancelar</button>

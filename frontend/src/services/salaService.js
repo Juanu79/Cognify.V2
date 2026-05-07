@@ -1,12 +1,11 @@
 import { supabase } from "../lib/supabaseClient";
 
-// ── Crear sala nueva ──────────────────────────────────
-export const crearSala = async (userId, areaNombre) => {
+// ── Crear sala ────────────────────────────────────────
+export const crearSala = async (userId, areaNombre, maxRetos = 5) => {
   const codigo = Math.random().toString(36).substring(2, 7).toUpperCase();
 
-  // Obtener area_id si se pasó nombre
   let areaId = null;
-  if (areaNombre) {
+  if (areaNombre && areaNombre !== "aleatorio") {
     const { data: area } = await supabase
       .from("areas")
       .select("id")
@@ -21,6 +20,7 @@ export const crearSala = async (userId, areaNombre) => {
       codigo,
       creador_id:    userId,
       max_jugadores: 2,
+      max_retos:     maxRetos,
       estado:        "esperando",
       area_id:       areaId,
     }])
@@ -29,18 +29,18 @@ export const crearSala = async (userId, areaNombre) => {
 
   if (error) return { data: null, error };
 
-  // Unir al creador como primer jugador
   await supabase.from("jugadores_sala").insert([{
     sala_id:    data.id,
     usuario_id: userId,
     listo:      false,
     puntaje:    0,
+    terminado:  false,
   }]);
 
   return { data, error: null };
 };
 
-// ── Unirse a sala por código ──────────────────────────
+// ── Unirse a sala ─────────────────────────────────────
 export const unirseSala = async (codigo, userId) => {
   const { data: sala, error: salaError } = await supabase
     .from("salas")
@@ -52,7 +52,6 @@ export const unirseSala = async (codigo, userId) => {
   if (sala.estado === "jugando")   return { sala: null, error: "La sala ya está en juego." };
   if (sala.estado === "terminada") return { sala: null, error: "La sala ya terminó." };
 
-  // Verificar si ya está en la sala
   const { data: yaEsta } = await supabase
     .from("jugadores_sala")
     .select("id")
@@ -60,9 +59,8 @@ export const unirseSala = async (codigo, userId) => {
     .eq("usuario_id", userId)
     .single();
 
-  if (yaEsta) return { sala, error: null }; // ya estaba, no duplicar
+  if (yaEsta) return { sala, error: null };
 
-  // Verificar cuántos jugadores hay
   const { count } = await supabase
     .from("jugadores_sala")
     .select("*", { count: "exact", head: true })
@@ -72,19 +70,18 @@ export const unirseSala = async (codigo, userId) => {
 
   const { error } = await supabase
     .from("jugadores_sala")
-    .insert([{ sala_id: sala.id, usuario_id: userId, listo: false, puntaje: 0 }]);
+    .insert([{ sala_id: sala.id, usuario_id: userId, listo: false, puntaje: 0, terminado: false }]);
 
   if (error) return { sala: null, error: error.message };
   return { sala, error: null };
 };
 
-// ── Obtener jugadores de una sala ─────────────────────
+// ── Obtener jugadores ─────────────────────────────────
 export const obtenerJugadores = async (salaId) => {
   const { data, error } = await supabase
     .from("jugadores_sala")
     .select(`
-      id, listo, puntaje, terminado,
-      usuario_id,
+      id, listo, puntaje, terminado, usuario_id,
       usuarios ( nombre, email, xp, nivel )
     `)
     .eq("sala_id", salaId)
@@ -93,7 +90,7 @@ export const obtenerJugadores = async (salaId) => {
   return { data: data || [], error };
 };
 
-// ── Obtener sala por id ───────────────────────────────
+// ── Obtener sala completa ─────────────────────────────
 export const obtenerSala = async (salaId) => {
   const { data, error } = await supabase
     .from("salas")
@@ -103,7 +100,7 @@ export const obtenerSala = async (salaId) => {
   return { data, error };
 };
 
-// ── Marcar jugador como listo ─────────────────────────
+// ── Marcar jugador listo ──────────────────────────────
 export const marcarListo = async (salaId, userId) => {
   const { error } = await supabase
     .from("jugadores_sala")
@@ -113,7 +110,7 @@ export const marcarListo = async (salaId, userId) => {
   return { error };
 };
 
-// ── Iniciar partida (solo el creador) ─────────────────
+// ── Iniciar partida ───────────────────────────────────
 export const iniciarPartida = async (salaId) => {
   const { error } = await supabase
     .from("salas")
@@ -122,7 +119,7 @@ export const iniciarPartida = async (salaId) => {
   return { error };
 };
 
-// ── Actualizar puntaje del jugador ────────────────────
+// ── Actualizar puntaje ────────────────────────────────
 export const actualizarPuntaje = async (salaId, userId, nuevoPuntaje) => {
   const { error } = await supabase
     .from("jugadores_sala")
@@ -132,7 +129,7 @@ export const actualizarPuntaje = async (salaId, userId, nuevoPuntaje) => {
   return { error };
 };
 
-// ── Marcar jugador como terminado ─────────────────────
+// ── Marcar jugador terminado ──────────────────────────
 export const marcarTerminado = async (salaId, userId, puntajeFinal) => {
   const { error } = await supabase
     .from("jugadores_sala")
@@ -142,34 +139,60 @@ export const marcarTerminado = async (salaId, userId, puntajeFinal) => {
   return { error };
 };
 
-// ── Terminar partida y guardar ganador ────────────────
-export const terminarPartida = async (salaId, ganadorId) => {
+// ── Terminar partida — fix ganador ────────────────────
+export const terminarPartida = async (salaId) => {
+  // Obtener todos los jugadores con su puntaje final
+  const { data: jugadores } = await supabase
+    .from("jugadores_sala")
+    .select("usuario_id, puntaje")
+    .eq("sala_id", salaId)
+    .order("puntaje", { ascending: false });
+
+  if (!jugadores || jugadores.length === 0) return;
+
+  // El ganador es quien tiene MÁS puntaje
+  // En caso de empate, el primero en la lista (orden de llegada)
+  const ganadorId = jugadores[0].puntaje >= (jugadores[1]?.puntaje ?? -1)
+    ? jugadores[0].usuario_id
+    : jugadores[1].usuario_id;
+
   await supabase
     .from("salas")
     .update({ estado: "terminada", ganador_id: ganadorId })
     .eq("id", salaId);
 
   // Guardar en retos_online
-  const { data: sala } = await supabase
-    .from("salas")
-    .select("creador_id, jugadores_sala ( usuario_id )")
-    .eq("id", salaId)
-    .single();
-
-  const jugadores = sala?.jugadores_sala || [];
   if (jugadores.length >= 2) {
-    const u1 = jugadores[0].usuario_id;
-    const u2 = jugadores[1].usuario_id;
     await supabase.from("retos_online").insert([{
-      usuario1_id: u1,
-      usuario2_id: u2,
+      usuario1_id: jugadores[0].usuario_id,
+      usuario2_id: jugadores[1].usuario_id,
       ganador:     ganadorId,
     }]);
   }
+
+  return { ganadorId };
 };
 
-// ── Obtener retos de un área para la sala ─────────────
-export const obtenerRetosParaSala = async (areaNombre, cantidad = 5) => {
+// ── Obtener retos del banco online ────────────────────
+export const obtenerRetosOnline = async (areaNombre, cantidad = 5) => {
+  // Modo aleatorio: mezclar de todas las áreas
+  if (!areaNombre || areaNombre === "aleatorio") {
+    const { data, error } = await supabase
+      .from("retos_online_bank")
+      .select("id, titulo, problem, answer, xp_reward, dificultad")
+      .limit(cantidad * 4); // traer más para poder mezclar
+
+    if (error) return { data: [], error };
+
+    // Mezclar y tomar la cantidad pedida
+    const mezclados = (data || [])
+      .sort(() => Math.random() - 0.5)
+      .slice(0, cantidad);
+
+    return { data: mezclados, error: null };
+  }
+
+  // Área específica
   const { data: area } = await supabase
     .from("areas")
     .select("id")
@@ -179,19 +202,21 @@ export const obtenerRetosParaSala = async (areaNombre, cantidad = 5) => {
   if (!area) return { data: [], error: "Área no encontrada" };
 
   const { data, error } = await supabase
-    .from("retos")
+    .from("retos_online_bank")
     .select("id, titulo, problem, answer, xp_reward, dificultad")
     .eq("area_id", area.id)
-    .order("xp_reward")
+    .order("random()")  // orden aleatorio en BD
     .limit(cantidad);
 
-  return { data: data || [], error };
+  // Mezclar también en cliente por si acaso
+  const mezclados = (data || []).sort(() => Math.random() - 0.5);
+  return { data: mezclados, error };
 };
 
-// ── Suscripción Realtime a jugadores ─────────────────
+// ── Realtime: suscribir jugadores ─────────────────────
 export const suscribirJugadores = (salaId, callback) => {
   return supabase
-    .channel(`sala-${salaId}`)
+    .channel(`sala-jug-${salaId}`)
     .on("postgres_changes", {
       event:  "*",
       schema: "public",
@@ -201,7 +226,7 @@ export const suscribirJugadores = (salaId, callback) => {
     .subscribe();
 };
 
-// ── Suscripción Realtime al estado de la sala ─────────
+// ── Realtime: suscribir sala ──────────────────────────
 export const suscribirSala = (salaId, callback) => {
   return supabase
     .channel(`sala-estado-${salaId}`)
@@ -214,7 +239,7 @@ export const suscribirSala = (salaId, callback) => {
     .subscribe();
 };
 
-// ── Salir de una sala ─────────────────────────────────
+// ── Salir de sala ─────────────────────────────────────
 export const salirSala = async (salaId, userId) => {
   const { error } = await supabase
     .from("jugadores_sala")

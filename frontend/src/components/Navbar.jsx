@@ -290,7 +290,7 @@ export default function Navbar() {
             <Link to="/dashboard" className={`nav-link${isActive("/dashboard") ? " active" : ""}`}>Dashboard</Link>
             <Link to="/areas"     className={`nav-link${isActive("/areas")     ? " active" : ""}`}>Áreas</Link>
             <Link to="/progreso"  className={`nav-link${isActive("/progreso")  ? " active" : ""}`}>Progreso</Link>
-            <Link to="/salas"     className="salas-btn">🎮 Salas</Link>
+            <Link to="/salas"     className="salas-btn">Salas</Link>
           </div>
 
           <div className="nav-right">
@@ -314,10 +314,10 @@ export default function Navbar() {
                       <p>Conectado como</p>
                       <strong>{user.email}</strong>
                     </div>
-                    <Link to="/profile"  className="dd-item" onClick={() => setShowMenu(false)}>👤 Perfil</Link>
-                    <Link to="/progreso" className="dd-item" onClick={() => setShowMenu(false)}>📊 Mi Progreso</Link>
+                    <Link to="/profile"  className="dd-item" onClick={() => setShowMenu(false)}>Perfil</Link>
+                    <Link to="/progreso" className="dd-item" onClick={() => setShowMenu(false)}> Mi Progreso</Link>
                     <div className="dd-divider" />
-                    <button className="dd-item logout" onClick={handleLogout}>🚪 Cerrar sesión</button>
+                    <button className="dd-item logout" onClick={handleLogout}>Cerrar sesión</button>
                   </div>
                 )}
               </div>

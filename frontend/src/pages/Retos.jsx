@@ -6,7 +6,7 @@ import Navbar from "../components/Navbar";
 const DIFF_COLORS = { "Fácil": "#10b981", "Media": "#f59e0b", "Difícil": "#ef4444" };
 const DIFF_BG     = { "Fácil": "#d1fae5", "Media": "#fef3c7", "Difícil": "#fee2e2" };
 const DIFF_TEXT   = { "Fácil": "#065f46", "Media": "#92400e", "Difícil": "#991b1b" };
-const MEMORY_SECONDS = { "Fácil": 25, "Media": 20, "Difícil": 10 };
+const MEMORY_SECONDS = { "Fácil": 20, "Media": 15, "Difícil": 10 };
 
 export default function Retos() {
   const { area } = useParams();
