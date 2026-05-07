@@ -49,6 +49,7 @@ export default function Salas() {
   const canalRef      = useRef(null);
   const canalSalaRef  = useRef(null);
   const inputRef      = useRef(null);
+  const retoIdxRef = useRef(0);
 
   useEffect(() => {
     const init = async () => {
@@ -63,23 +64,33 @@ export default function Salas() {
     return () => limpiarTimers();
   }, []);
 
+  useEffect(() => {
+  retoIdxRef.current = retoIdx;
+}, [retoIdx]);
+
   const limpiarTimers = () => {
     clearInterval(timerRetoRef.current);
     clearInterval(timerTotalRef.current);
   };
 
-  const suscribir = (salaId) => {
-    canalRef.current = suscribirJugadores(salaId, async () => {
-      const { data } = await obtenerJugadores(salaId);
-      setJugadores(data);
-    });
-    canalSalaRef.current = suscribirSala(salaId, async (payload) => {
-      const nuevoEstado = payload.new?.estado;
-      if (nuevoEstado === "jugando") await cargarRetosYEmpezar(salaId);
-      if (nuevoEstado === "terminada") await cargarResultado(salaId);
-    });
-  };
+ const suscribir = (salaId) => {
+  canalRef.current = suscribirJugadores(salaId, async () => {
+    const { data } = await obtenerJugadores(salaId);
+    setJugadores(data);
 
+    // Verificar si todos terminaron en tiempo real
+    if (data.length >= 2 && data.every(j => j.terminado)) {
+      await terminarPartida(salaId);
+      await cargarResultado(salaId);
+    }
+  });
+
+  canalSalaRef.current = suscribirSala(salaId, async (payload) => {
+    const nuevoEstado = payload.new?.estado;
+    if (nuevoEstado === "jugando") await cargarRetosYEmpezar(salaId);
+    if (nuevoEstado === "terminada") await cargarResultado(salaId);
+  });
+};
   const desuscribir = () => {
     canalRef.current?.unsubscribe();
     canalSalaRef.current?.unsubscribe();
@@ -143,26 +154,28 @@ export default function Salas() {
     iniciarTimers(areaNombre);
   };
 
-  const tieneLimite = (area) => !AREAS_SIN_TIMER.includes(area);
+const tieneLimite = (area) => !AREAS_SIN_TIMER.includes(area);
 
-  const iniciarTimers = (area) => {
-    limpiarTimers();
-    timerTotalRef.current = setInterval(() => {
-      setTiempoTotal(prev => prev + 1);
+const iniciarTimers = (area) => {
+  limpiarTimers();
+
+  timerTotalRef.current = setInterval(() => {
+    setTiempoTotal(prev => prev + 1);
+  }, 1000);
+
+  if (tieneLimite(area)) {
+    setTiempoReto(TIEMPO_POR_PREGUNTA);
+    timerRetoRef.current = setInterval(() => {
+      setTiempoReto(prev => {
+        if (prev <= 1) {
+          pasarRetoTimer();
+          return TIEMPO_POR_PREGUNTA;
+        }
+        return prev - 1;
+      });
     }, 1000);
-    if (tieneLimite(area)) {
-      setTiempoReto(TIEMPO_POR_PREGUNTA);
-      timerRetoRef.current = setInterval(() => {
-        setTiempoReto(prev => {
-          if (prev <= 1) {
-            pasarReto(false);
-            return TIEMPO_POR_PREGUNTA;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-  };
+  }
+};
 
   const resetTimerReto = () => setTiempoReto(TIEMPO_POR_PREGUNTA);
 
@@ -191,6 +204,26 @@ export default function Salas() {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
+
+  const pasarRetoTimer = () => {
+  const siguiente = retoIdxRef.current + 1;
+  setRetos(currentRetos => {
+    if (siguiente >= currentRetos.length) {
+      limpiarTimers();
+      setTerminado(true);
+      if (sala) {
+        setPuntaje(p => {
+          marcarTerminado(sala.id, user?.id, p);
+          return p;
+        });
+      }
+    } else {
+      setRetoIdx(siguiente);
+      retoIdxRef.current = siguiente;
+    }
+    return currentRetos;
+  });
+};
 
   const finalizarJuego = async () => {
     limpiarTimers();
