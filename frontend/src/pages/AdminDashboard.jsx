@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 
 const TABS = ["overview", "usuarios", "salas"];
-const TAB_LABELS = { overview: "📊 Overview", usuarios: "👥 Usuarios", salas: "🎮 Partidas" };
+const TAB_LABELS = { overview: "General", usuarios: " Usuarios", salas: " Partidas" };
 
 export default function AdminDashboard({ user }) {
   const navigate = useNavigate();
