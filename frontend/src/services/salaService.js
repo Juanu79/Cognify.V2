@@ -139,9 +139,8 @@ export const marcarTerminado = async (salaId, userId, puntajeFinal) => {
   return { error };
 };
 
-// ── Terminar partida — fix ganador ────────────────────
+// ── Terminar partida ──────────────────────────────────
 export const terminarPartida = async (salaId) => {
-  // Obtener todos los jugadores con su puntaje final
   const { data: jugadores } = await supabase
     .from("jugadores_sala")
     .select("usuario_id, puntaje")
@@ -150,8 +149,6 @@ export const terminarPartida = async (salaId) => {
 
   if (!jugadores || jugadores.length === 0) return;
 
-  // El ganador es quien tiene MÁS puntaje
-  // En caso de empate, el primero en la lista (orden de llegada)
   const ganadorId = jugadores[0].puntaje >= (jugadores[1]?.puntaje ?? -1)
     ? jugadores[0].usuario_id
     : jugadores[1].usuario_id;
@@ -161,7 +158,6 @@ export const terminarPartida = async (salaId) => {
     .update({ estado: "terminada", ganador_id: ganadorId })
     .eq("id", salaId);
 
-  // Guardar en retos_online
   if (jugadores.length >= 2) {
     await supabase.from("retos_online").insert([{
       usuario1_id: jugadores[0].usuario_id,
@@ -175,16 +171,14 @@ export const terminarPartida = async (salaId) => {
 
 // ── Obtener retos del banco online ────────────────────
 export const obtenerRetosOnline = async (areaNombre, cantidad = 5) => {
-  // Modo aleatorio: mezclar de todas las áreas
   if (!areaNombre || areaNombre === "aleatorio") {
     const { data, error } = await supabase
       .from("retos_online_bank")
       .select("id, titulo, problem, answer, xp_reward, dificultad")
-      .limit(cantidad * 4); // traer más para poder mezclar
+      .limit(cantidad * 4);
 
     if (error) return { data: [], error };
 
-    // Mezclar y tomar la cantidad pedida
     const mezclados = (data || [])
       .sort(() => Math.random() - 0.5)
       .slice(0, cantidad);
@@ -192,7 +186,6 @@ export const obtenerRetosOnline = async (areaNombre, cantidad = 5) => {
     return { data: mezclados, error: null };
   }
 
-  // Área específica
   const { data: area } = await supabase
     .from("areas")
     .select("id")
@@ -205,11 +198,12 @@ export const obtenerRetosOnline = async (areaNombre, cantidad = 5) => {
     .from("retos_online_bank")
     .select("id, titulo, problem, answer, xp_reward, dificultad")
     .eq("area_id", area.id)
-    .order("random()")  // orden aleatorio en BD
-    .limit(cantidad);
+    .limit(cantidad * 3);
 
-  // Mezclar también en cliente por si acaso
-  const mezclados = (data || []).sort(() => Math.random() - 0.5);
+  const mezclados = (data || [])
+    .sort(() => Math.random() - 0.5)
+    .slice(0, cantidad);
+
   return { data: mezclados, error };
 };
 
