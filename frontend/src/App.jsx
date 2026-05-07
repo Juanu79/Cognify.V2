@@ -18,39 +18,21 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const checkAdmin = async (email) => {
-  if (!email) return false;
-  try {
-    const { data, error } = await supabase
-      .from("admins")
-      .select("id")
-      .eq("email", email)
-      .single();
-    if (error) return false;
-    return !!data;
-  } catch {
-    return false;
-  }
-};
+    if (!email) return false;
+    try {
+      const { data, error } = await supabase
+        .from("admins")
+        .select("id")
+        .eq("email", email)
+        .single();
+      if (error) return false;
+      return !!data;
+    } catch {
+      return false;
+    }
+  };
 
   useEffect(() => {
-  
-  const getInitialSession = async () => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const currentUser = session?.user || null;
-    setUser(currentUser);
-    if (currentUser) {
-      const admin = await checkAdmin(currentUser.email);
-      setIsAdmin(admin);
-    }
-  } catch (e) {
-    console.error("Error sesión:", e);
-  } finally {
-    setLoading(false); // ← esto garantiza que siempre se quite el loading
-  }
-};
-getInitialSession();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const currentUser = session?.user || null;
       setUser(currentUser);
@@ -63,9 +45,7 @@ getInitialSession();
       setLoading(false);
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   if (loading) {
@@ -78,7 +58,6 @@ getInitialSession();
 
   return (
     <Routes>
-      {/* Rutas públicas */}
       <Route path="/" element={
         !user ? <Login /> : isAdmin ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />
       } />
@@ -90,18 +69,13 @@ getInitialSession();
           </div>
         )
       } />
-
-      {/* Rutas de usuario normal */}
       <Route path="/dashboard" element={user && !isAdmin ? <Dashboard /> : <Navigate to="/" />} />
       <Route path="/areas" element={user && !isAdmin ? <Areas /> : <Navigate to="/" />} />
       <Route path="/retos/:area" element={user && !isAdmin ? <Retos /> : <Navigate to="/" />} />
       <Route path="/progreso" element={user && !isAdmin ? <Progreso /> : <Navigate to="/" />} />
       <Route path="/profile" element={user && !isAdmin ? <Profile /> : <Navigate to="/" />} />
       <Route path="/salas" element={user && !isAdmin ? <Salas user={user} /> : <Navigate to="/" />} />
-
-      {/* Rutas de admin */}
       <Route path="/admin" element={user && isAdmin ? <AdminDashboard user={user} /> : <Navigate to="/" />} />
-
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
