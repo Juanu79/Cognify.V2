@@ -10,22 +10,46 @@ import Retos from "./pages/Retos";
 import Progreso from "./pages/Progreso";
 import Profile from "./pages/Profile";
 import Salas from "./pages/Salas";
+import AdminDashboard from "./pages/AdminDashboard";
 
 export default function App() {
   const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const checkAdmin = async (email) => {
+    if (!email) return false;
+    const { data } = await supabase
+      .from("admins")
+      .select("id")
+      .eq("email", email)
+      .single();
+    return !!data;
+  };
 
   useEffect(() => {
     const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user || null);
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+      if (currentUser) {
+        const admin = await checkAdmin(currentUser.email);
+        setIsAdmin(admin);
+      }
       setLoading(false);
     };
 
     getInitialSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const currentUser = session?.user || null;
+      setUser(currentUser);
+      if (currentUser) {
+        const admin = await checkAdmin(currentUser.email);
+        setIsAdmin(admin);
+      } else {
+        setIsAdmin(false);
+      }
       setLoading(false);
     });
 
@@ -44,19 +68,30 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={!user ? <Login /> : <Navigate to="/dashboard" />} />
+      {/* Rutas públicas */}
+      <Route path="/" element={
+        !user ? <Login /> : isAdmin ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />
+      } />
       <Route path="/register" element={!user ? <Register /> : <Navigate to="/dashboard" />} />
       <Route path="/auth/callback" element={
-       user ? <Navigate to="/dashboard" /> : (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-      <p>Iniciando sesión...</p>
-      </div>)} />
-      <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/" />} />
-      <Route path="/areas" element={user ? <Areas /> : <Navigate to="/" />} />
-      <Route path="/retos/:area" element={user ? <Retos /> : <Navigate to="/" />} />
-      <Route path="/progreso" element={user ? <Progreso /> : <Navigate to="/" />} />
-      <Route path="/profile" element={user ? <Profile /> : <Navigate to="/" />} />
-      <Route path="/salas" element={user ? <Salas user={user} /> : <Navigate to="/" />} />
+        user ? (isAdmin ? <Navigate to="/admin" /> : <Navigate to="/dashboard" />) : (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+            <p>Iniciando sesión...</p>
+          </div>
+        )
+      } />
+
+      {/* Rutas de usuario normal */}
+      <Route path="/dashboard" element={user && !isAdmin ? <Dashboard /> : <Navigate to="/" />} />
+      <Route path="/areas" element={user && !isAdmin ? <Areas /> : <Navigate to="/" />} />
+      <Route path="/retos/:area" element={user && !isAdmin ? <Retos /> : <Navigate to="/" />} />
+      <Route path="/progreso" element={user && !isAdmin ? <Progreso /> : <Navigate to="/" />} />
+      <Route path="/profile" element={user && !isAdmin ? <Profile /> : <Navigate to="/" />} />
+      <Route path="/salas" element={user && !isAdmin ? <Salas user={user} /> : <Navigate to="/" />} />
+
+      {/* Rutas de admin */}
+      <Route path="/admin" element={user && isAdmin ? <AdminDashboard user={user} /> : <Navigate to="/" />} />
+
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
