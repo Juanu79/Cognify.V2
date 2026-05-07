@@ -18,28 +18,38 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const checkAdmin = async (email) => {
-    if (!email) return false;
-    const { data } = await supabase
+  if (!email) return false;
+  try {
+    const { data, error } = await supabase
       .from("admins")
       .select("id")
       .eq("email", email)
       .single();
+    if (error) return false;
     return !!data;
-  };
+  } catch {
+    return false;
+  }
+};
 
   useEffect(() => {
-    const getInitialSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user || null;
-      setUser(currentUser);
-      if (currentUser) {
-        const admin = await checkAdmin(currentUser.email);
-        setIsAdmin(admin);
-      }
-      setLoading(false);
-    };
-
-    getInitialSession();
+  
+  const getInitialSession = async () => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const currentUser = session?.user || null;
+    setUser(currentUser);
+    if (currentUser) {
+      const admin = await checkAdmin(currentUser.email);
+      setIsAdmin(admin);
+    }
+  } catch (e) {
+    console.error("Error sesión:", e);
+  } finally {
+    setLoading(false); // ← esto garantiza que siempre se quite el loading
+  }
+};
+getInitialSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       const currentUser = session?.user || null;
