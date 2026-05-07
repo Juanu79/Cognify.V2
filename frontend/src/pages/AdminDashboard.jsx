@@ -1,65 +1,90 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 
-const TABS = ["overview", "usuarios", "salas"];
-const TAB_LABELS = { overview: "General", usuarios: " Usuarios", salas: " Partidas" };
+const TABS = ["general", "usuarios", "partidas", "ranking", "ajustes"];
+const TAB_ICONS = {
+  general:  "⊞",
+  usuarios: "👤",
+  partidas: "🎮",
+  ranking:  "🏆",
+  ajustes:  "⚙",
+};
+const TAB_LABELS = {
+  general:  "General",
+  usuarios: "Usuarios",
+  partidas: "Partidas",
+  ranking:  "Ranking",
+  ajustes:  "Ajustes",
+};
+
+const fmt = (n) => (n ?? 0).toLocaleString("es");
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString("es-CO", { day:"numeric", month:"short", year:"numeric" }) : "—";
+const today = () => new Date().toLocaleDateString("es-CO", { weekday:"long", day:"numeric", month:"long" });
+const todayISO = () => new Date().toISOString().split("T")[0];
 
 export default function AdminDashboard({ user }) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("overview");
-  const [loading, setLoading] = useState(true);
-
-  // Data states
-  const [stats, setStats] = useState({ totalUsuarios: 0, activosHoy: 0, partidasHoy: 0, retosCompletados: 0 });
-  const [usuarios, setUsuarios] = useState([]);
-  const [salas, setSalas] = useState([]);
-  const [actividadDias, setActividadDias] = useState([]);
-  const [searchUsuario, setSearchUsuario] = useState("");
-  const [modalUsuario, setModalUsuario] = useState(null);
+  const [tab, setTab]           = useState("general");
+  const [loading, setLoading]   = useState(true);
+  const [sideOpen, setSideOpen] = useState(true);
   const [adminNombre, setAdminNombre] = useState("");
+
+  // Data
+  const [stats, setStats]             = useState({ totalUsuarios:0, activosHoy:0, partidasHoy:0, retosCompletados:0 });
+  const [extraStats, setExtraStats]   = useState({ actividadMes:0, tasaCompletacion:0, promedioSesion:24 });
+  const [usuarios, setUsuarios]       = useState([]);
+  const [salas, setSalas]             = useState([]);
+  const [actividadDias, setActividad] = useState([]);
+  const [searchU, setSearchU]         = useState("");
+  const [modalU, setModalU]           = useState(null);
+  const [ajustesMsg, setAjustesMsg]   = useState("");
+
+  // Ajustes form
+  const [ajNombre, setAjNombre]       = useState("");
+  const [ajEmail, setAjEmail]         = useState("");
 
   useEffect(() => {
     const init = async () => {
       setLoading(true);
       await Promise.all([cargarStats(), cargarUsuarios(), cargarSalas(), cargarActividad()]);
-      // Cargar nombre del admin
       const { data } = await supabase.from("admins").select("nombre").eq("email", user.email).single();
-      if (data) setAdminNombre(data.nombre);
+      if (data) { setAdminNombre(data.nombre); setAjNombre(data.nombre); }
+      setAjEmail(user.email);
       setLoading(false);
     };
     init();
   }, []);
 
   const cargarStats = async () => {
-    const hoy = new Date().toISOString().split("T")[0];
+    const hoy = todayISO();
+    const [{ count: tu }, { count: ah }, { count: ph }, { count: rc }] = await Promise.all([
+      supabase.from("usuarios").select("*", { count:"exact", head:true }),
+      supabase.from("usuarios").select("*", { count:"exact", head:true }).gte("ultimo_login", hoy),
+      supabase.from("salas").select("*", { count:"exact", head:true }).gte("created_at", hoy),
+      supabase.from("progreso").select("*", { count:"exact", head:true }).eq("completado", true),
+    ]);
+    setStats({ totalUsuarios:tu||0, activosHoy:ah||0, partidasHoy:ph||0, retosCompletados:rc||0 });
 
-    const { count: totalUsuarios } = await supabase.from("usuarios").select("*", { count: "exact", head: true });
-    const { count: activosHoy } = await supabase.from("usuarios").select("*", { count: "exact", head: true }).gte("ultimo_login", hoy);
-    const { count: partidasHoy } = await supabase.from("salas").select("*", { count: "exact", head: true }).gte("created_at", hoy);
-    const { count: retosCompletados } = await supabase.from("progreso").select("*", { count: "exact", head: true }).eq("completado", true);
-
-    setStats({
-      totalUsuarios: totalUsuarios || 0,
-      activosHoy: activosHoy || 0,
-      partidasHoy: partidasHoy || 0,
-      retosCompletados: retosCompletados || 0,
-    });
+    // Extra stats
+    const mesInicio = new Date(); mesInicio.setDate(1);
+    const { count: am } = await supabase.from("salas").select("*", { count:"exact", head:true }).gte("created_at", mesInicio.toISOString());
+    const { count: totalRetos } = await supabase.from("progreso").select("*", { count:"exact", head:true });
+    const tasa = totalRetos > 0 ? Math.round(((rc||0) / totalRetos) * 100) : 0;
+    setExtraStats({ actividadMes: am||0, tasaCompletacion: tasa, promedioSesion: 24 });
   };
 
   const cargarUsuarios = async () => {
-    const { data } = await supabase
-      .from("usuarios")
+    const { data } = await supabase.from("usuarios")
       .select("id, nombre, email, xp, nivel, racha, ultimo_login, created_at")
-      .order("xp", { ascending: false });
+      .order("xp", { ascending:false });
     setUsuarios(data || []);
   };
 
   const cargarSalas = async () => {
-    const { data } = await supabase
-      .from("salas")
-      .select(`id, codigo, estado, created_at, areas(nombre)`)
-      .order("created_at", { ascending: false })
+    const { data } = await supabase.from("salas")
+      .select("id, codigo, estado, created_at, areas(nombre)")
+      .order("created_at", { ascending:false })
       .limit(50);
     setSalas(data || []);
   };
@@ -67,17 +92,21 @@ export default function AdminDashboard({ user }) {
   const cargarActividad = async () => {
     const dias = [];
     for (let i = 6; i >= 0; i--) {
-      const fecha = new Date();
-      fecha.setDate(fecha.getDate() - i);
-      const fechaStr = fecha.toISOString().split("T")[0];
-      const { count } = await supabase
-        .from("usuarios")
-        .select("*", { count: "exact", head: true })
-        .gte("ultimo_login", fechaStr)
-        .lt("ultimo_login", new Date(fecha.getTime() + 86400000).toISOString().split("T")[0]);
-      dias.push({ fecha: fechaStr, label: fecha.toLocaleDateString("es", { weekday: "short" }), count: count || 0 });
+      const f = new Date(); f.setDate(f.getDate() - i);
+      const fs = f.toISOString().split("T")[0];
+      const fn = new Date(f.getTime() + 86400000).toISOString().split("T")[0];
+      const { count } = await supabase.from("usuarios").select("*", { count:"exact", head:true })
+        .gte("ultimo_login", fs).lt("ultimo_login", fn);
+      dias.push({ label: f.toLocaleDateString("es", { weekday:"short" }), count: count||0 });
     }
-    setActividadDias(dias);
+    setActividad(dias);
+  };
+
+  const eliminarUsuario = async (id) => {
+    if (!confirm("¿Eliminar este usuario permanentemente?")) return;
+    await supabase.from("usuarios").delete().eq("id", id);
+    setUsuarios(prev => prev.filter(u => u.id !== id));
+    setModalU(null);
   };
 
   const handleLogout = async () => {
@@ -85,462 +114,493 @@ export default function AdminDashboard({ user }) {
     navigate("/");
   };
 
-  const eliminarUsuario = async (id) => {
-    if (!confirm("¿Eliminar este usuario?")) return;
-    await supabase.from("usuarios").delete().eq("id", id);
-    setUsuarios(prev => prev.filter(u => u.id !== id));
-    setModalUsuario(null);
+  const handleExportarCSV = () => {
+    const rows = [["Nombre","Email","Nivel","XP","Racha","Último acceso","Registro"]];
+    usuarios.forEach(u => rows.push([u.nombre||"", u.email, u.nivel||1, u.xp||0, u.racha||0, fmtDate(u.ultimo_login), fmtDate(u.created_at)]));
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type:"text/csv" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "usuarios_cognify.csv"; a.click();
+  };
+
+  const handleGuardarAjustes = async () => {
+    await supabase.from("admins").update({ nombre: ajNombre }).eq("email", user.email);
+    setAdminNombre(ajNombre);
+    setAjustesMsg("✅ Cambios guardados correctamente.");
+    setTimeout(() => setAjustesMsg(""), 3000);
   };
 
   const usuariosFiltrados = usuarios.filter(u =>
-    u.nombre?.toLowerCase().includes(searchUsuario.toLowerCase()) ||
-    u.email?.toLowerCase().includes(searchUsuario.toLowerCase())
+    u.nombre?.toLowerCase().includes(searchU.toLowerCase()) ||
+    u.email?.toLowerCase().includes(searchU.toLowerCase())
   );
 
-  const maxActividad = Math.max(...actividadDias.map(d => d.count), 1);
+  const maxAct  = Math.max(...actividadDias.map(d => d.count), 1);
+  const xpProm  = usuarios.length > 0 ? Math.round(usuarios.reduce((s,u) => s+(u.xp||0), 0) / usuarios.length) : 0;
+  const nv2     = usuarios.filter(u => (u.nivel||1) >= 2).length;
+  const nv1     = usuarios.filter(u => (u.nivel||1) < 2).length;
 
   if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#080b14", fontFamily: "'DM Mono', monospace" }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ width: 48, height: 48, border: "3px solid #00ff88", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 16px" }} />
-        <p style={{ color: "#00ff88", fontSize: "0.85rem", letterSpacing: "0.15em" }}>CARGANDO PANEL...</p>
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh", background:"#0d1117" }}>
+      <div style={{ textAlign:"center" }}>
+        <div style={{ width:48, height:48, border:"3px solid #00c896", borderTopColor:"transparent", borderRadius:"50%", animation:"spin 0.8s linear infinite", margin:"0 auto 16px" }}/>
+        <p style={{ color:"#00c896", fontSize:"0.85rem", letterSpacing:"0.1em", fontFamily:"'DM Sans',sans-serif" }}>Cargando panel...</p>
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@600;700;800&display=swap');
-
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        :root {
-          --bg: #080b14;
-          --bg2: #0d1220;
-          --bg3: #121829;
-          --border: rgba(255,255,255,0.07);
-          --green: #00ff88;
-          --blue: #4d9fff;
-          --purple: #a855f7;
-          --orange: #ff6b35;
-          --text: #e2e8f0;
-          --muted: #64748b;
-          --font-mono: 'DM Mono', monospace;
-          --font-display: 'Syne', sans-serif;
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+        :root{
+          --bg:       #0d1117;
+          --bg2:      #161b22;
+          --bg3:      #1c2333;
+          --bg4:      #21262d;
+          --border:   rgba(255,255,255,0.08);
+          --green:    #00c896;
+          --green2:   #00e5a8;
+          --blue:     #58a6ff;
+          --purple:   #a371f7;
+          --orange:   #f78166;
+          --yellow:   #e3b341;
+          --text:     #e6edf3;
+          --text2:    #8b949e;
+          --font:     'DM Sans', sans-serif;
+          --fontd:    'Space Grotesk', sans-serif;
+          --radius:   14px;
+          --side:     280px;
         }
+        body{ background:var(--bg); color:var(--text); font-family:var(--font); }
 
-        .admin-root {
-          min-height: 100vh;
-          background: var(--bg);
-          color: var(--text);
-          font-family: var(--font-mono);
-          display: flex;
-        }
+        @keyframes spin    { to { transform:rotate(360deg); } }
+        @keyframes fadeUp  { from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)} }
+        @keyframes fadeIn  { from{opacity:0}to{opacity:1} }
+
+        /* ── LAYOUT ── */
+        .ad-root { display:flex; min-height:100vh; background:var(--bg); }
 
         /* ── SIDEBAR ── */
-        .sidebar {
-          width: 220px;
-          background: var(--bg2);
-          border-right: 1px solid var(--border);
-          display: flex;
-          flex-direction: column;
-          padding: 28px 16px;
-          position: fixed;
-          top: 0; left: 0;
-          height: 100vh;
-          z-index: 100;
+        .ad-side {
+          width:var(--side); background:var(--bg2);
+          border-right:1px solid var(--border);
+          display:flex; flex-direction:column;
+          padding:24px 16px; position:fixed;
+          top:0; left:0; height:100vh; z-index:100;
+          transition:width 0.25s ease;
         }
+        .ad-side.collapsed { width:72px; }
+        .ad-side.collapsed .side-label { display:none; }
+        .ad-side.collapsed .side-logo-text { display:none; }
+        .ad-side.collapsed .side-user-info { display:none; }
+        .ad-side.collapsed .side-badge { display:none; }
 
-        .sidebar-logo {
-          font-family: var(--font-display);
-          font-size: 1.3rem;
-          font-weight: 800;
-          color: var(--green);
-          letter-spacing: -0.02em;
-          margin-bottom: 6px;
-          padding: 0 8px;
+        .side-logo { display:flex; align-items:center; gap:10px; margin-bottom:6px; padding:0 6px; }
+        .side-logo-icon {
+          width:38px; height:38px; border-radius:10px; flex-shrink:0;
+          background:linear-gradient(135deg,#00c896,#00a878);
+          display:flex; align-items:center; justify-content:center;
+          font-weight:800; color:#000; font-size:0.85rem; font-family:var(--fontd);
         }
+        .side-logo-text { font-family:var(--fontd); font-size:1.15rem; font-weight:700; color:var(--green); }
+        .side-badge { font-size:0.62rem; color:var(--text2); letter-spacing:0.1em; text-transform:uppercase; padding:0 6px; margin-bottom:28px; }
 
-        .sidebar-badge {
-          font-size: 0.65rem;
-          letter-spacing: 0.12em;
-          color: var(--muted);
-          text-transform: uppercase;
-          padding: 0 8px;
-          margin-bottom: 32px;
+        .side-nav { display:flex; flex-direction:column; gap:4px; flex:1; }
+        .side-btn {
+          display:flex; align-items:center; gap:12px;
+          padding:11px 12px; border-radius:10px;
+          background:none; border:none; color:var(--text2);
+          font-size:0.88rem; font-family:var(--font); font-weight:500;
+          cursor:pointer; text-align:left; transition:all 0.15s; white-space:nowrap;
         }
-
-        .sidebar-nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-
-        .nav-btn {
-          display: flex; align-items: center; gap: 10px;
-          padding: 10px 12px; border-radius: 8px;
-          background: none; border: none;
-          color: var(--muted); font-size: 0.82rem;
-          font-family: var(--font-mono);
-          cursor: pointer; text-align: left;
-          transition: all 0.15s;
-          letter-spacing: 0.02em;
+        .side-btn:hover { background:var(--bg3); color:var(--text); }
+        .side-btn.active {
+          background:rgba(0,200,150,0.1); color:var(--green);
+          border:1px solid rgba(0,200,150,0.2);
         }
-        .nav-btn:hover { background: var(--bg3); color: var(--text); }
-        .nav-btn.active { background: rgba(0,255,136,0.08); color: var(--green); border: 1px solid rgba(0,255,136,0.15); }
-
-        .sidebar-user {
-          border-top: 1px solid var(--border);
-          padding-top: 16px;
-          margin-top: auto;
+        .side-btn .icon {
+          width:32px; height:32px; border-radius:8px; flex-shrink:0;
+          display:flex; align-items:center; justify-content:center;
+          font-size:1rem; background:var(--bg3);
+          transition:background 0.15s;
         }
-        .sidebar-user-name { font-size: 0.78rem; color: var(--text); font-weight: 500; margin-bottom: 2px; }
-        .sidebar-user-email { font-size: 0.68rem; color: var(--muted); margin-bottom: 12px; word-break: break-all; }
+        .side-btn.active .icon { background:rgba(0,200,150,0.15); }
 
-        .btn-logout {
-          width: 100%; padding: 8px 12px; border-radius: 8px;
-          background: rgba(255,107,53,0.1); border: 1px solid rgba(255,107,53,0.2);
-          color: var(--orange); font-size: 0.75rem; font-family: var(--font-mono);
-          cursor: pointer; transition: all 0.15s; letter-spacing: 0.05em;
+        .side-user {
+          border-top:1px solid var(--border); padding-top:16px;
+          display:flex; align-items:center; gap:10px;
         }
-        .btn-logout:hover { background: rgba(255,107,53,0.2); }
+        .side-user-avatar {
+          width:36px; height:36px; border-radius:50%; flex-shrink:0;
+          background:linear-gradient(135deg,var(--green),var(--blue));
+          display:flex; align-items:center; justify-content:center;
+          font-weight:700; color:#000; font-size:0.85rem;
+        }
+        .side-user-info { flex:1; min-width:0; }
+        .side-user-name { font-size:0.82rem; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .side-user-email { font-size:0.68rem; color:var(--text2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
         /* ── MAIN ── */
-        .main {
-          margin-left: 220px;
-          flex: 1;
-          padding: 32px;
-          min-height: 100vh;
-        }
+        .ad-main { margin-left:var(--side); flex:1; padding:32px 32px 80px; transition:margin-left 0.25s; }
+        .ad-main.collapsed { margin-left:72px; }
 
-        .page-header {
-          margin-bottom: 32px;
-          animation: fadeUp 0.4s ease both;
+        /* ── TOP BAR ── */
+        .topbar {
+          display:flex; justify-content:space-between; align-items:center;
+          margin-bottom:28px; animation:fadeUp 0.4s ease both;
         }
-        .page-title {
-          font-family: var(--font-display);
-          font-size: 1.8rem;
-          font-weight: 800;
-          color: var(--text);
-          margin-bottom: 4px;
-        }
-        .page-sub { font-size: 0.78rem; color: var(--muted); letter-spacing: 0.05em; }
+        .topbar-left h1 { font-family:var(--fontd); font-size:2rem; font-weight:700; color:var(--text); line-height:1.1; }
+        .topbar-left p  { font-size:0.8rem; color:var(--text2); margin-top:4px; display:flex; align-items:center; gap:6px; }
+        .topbar-right { display:flex; gap:10px; align-items:center; }
 
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(12px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
+        .btn { display:inline-flex; align-items:center; gap:8px; padding:9px 18px; border-radius:10px; font-size:0.83rem; font-weight:600; font-family:var(--font); cursor:pointer; transition:all 0.15s; border:none; white-space:nowrap; }
+        .btn-outline { background:var(--bg3); border:1px solid var(--border); color:var(--text2); }
+        .btn-outline:hover { border-color:var(--green); color:var(--green); }
+        .btn-primary { background:var(--green); color:#000; box-shadow:0 4px 14px rgba(0,200,150,0.3); }
+        .btn-primary:hover { background:var(--green2); transform:translateY(-1px); }
+        .btn-danger { background:rgba(247,129,102,0.1); border:1px solid rgba(247,129,102,0.2); color:var(--orange); }
+        .btn-danger:hover { background:rgba(247,129,102,0.2); }
 
         /* ── STAT CARDS ── */
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 16px;
-          margin-bottom: 28px;
-          animation: fadeUp 0.4s ease 0.05s both;
-        }
-
+        .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; animation:fadeUp 0.4s ease 0.05s both; }
         .stat-card {
-          background: var(--bg2);
-          border: 1px solid var(--border);
-          border-radius: 12px;
-          padding: 20px;
-          position: relative;
-          overflow: hidden;
+          background:var(--bg2); border:1px solid var(--border);
+          border-radius:var(--radius); padding:22px 20px;
+          position:relative; overflow:hidden;
+          transition:transform 0.2s, border-color 0.2s;
         }
-        .stat-card::before {
-          content: '';
-          position: absolute;
-          top: 0; left: 0; right: 0;
-          height: 2px;
-        }
-        .stat-card.green::before { background: var(--green); }
-        .stat-card.blue::before  { background: var(--blue); }
-        .stat-card.purple::before { background: var(--purple); }
-        .stat-card.orange::before { background: var(--orange); }
+        .stat-card:hover { transform:translateY(-2px); border-color:rgba(255,255,255,0.14); }
+        .stat-card::before { content:''; position:absolute; top:0;left:0;right:0;height:2px; }
+        .stat-card.c-green::before { background:var(--green); }
+        .stat-card.c-blue::before  { background:var(--blue); }
+        .stat-card.c-purple::before{ background:var(--purple); }
+        .stat-card.c-orange::before{ background:var(--orange); }
 
-        .stat-label { font-size: 0.7rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
-        .stat-value { font-family: var(--font-display); font-size: 2rem; font-weight: 800; }
-        .stat-value.green  { color: var(--green); }
-        .stat-value.blue   { color: var(--blue); }
-        .stat-value.purple { color: var(--purple); }
-        .stat-value.orange { color: var(--orange); }
+        .stat-top { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+        .stat-icon { width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1rem; }
+        .stat-icon.c-green  { background:rgba(0,200,150,0.12); }
+        .stat-icon.c-blue   { background:rgba(88,166,255,0.12); }
+        .stat-icon.c-purple { background:rgba(163,113,247,0.12); }
+        .stat-icon.c-orange { background:rgba(247,129,102,0.12); }
+        .stat-pct { font-size:0.72rem; font-weight:600; display:flex; align-items:center; gap:3px; }
+        .stat-pct.up   { color:var(--green); }
+        .stat-pct.zero { color:var(--text2); }
+        .stat-label { font-size:0.72rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; }
+        .stat-value { font-family:var(--fontd); font-size:2.2rem; font-weight:700; color:var(--text); line-height:1; margin-bottom:4px; }
+        .stat-sub   { font-size:0.72rem; color:var(--text2); }
 
-        /* ── GRID 2 cols ── */
-        .grid2 {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          animation: fadeUp 0.4s ease 0.1s both;
-        }
-
-        .panel {
-          background: var(--bg2);
-          border: 1px solid var(--border);
-          border-radius: 12px;
-          padding: 20px;
-        }
-        .panel-title {
-          font-size: 0.72rem;
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          color: var(--muted);
-          margin-bottom: 20px;
-          font-weight: 500;
-        }
+        /* ── PANELS ── */
+        .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; animation:fadeUp 0.4s ease 0.1s both; }
+        .panel { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:22px; }
+        .panel-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+        .panel-title { font-family:var(--fontd); font-size:1rem; font-weight:600; color:var(--text); }
+        .panel-sub   { font-size:0.75rem; color:var(--text2); margin-bottom:18px; }
+        .panel-link  { font-size:0.75rem; color:var(--green); font-weight:600; cursor:pointer; text-decoration:none; background:none; border:none; font-family:var(--font); }
+        .panel-link:hover { text-decoration:underline; }
 
         /* ── CHART ── */
-        .chart-bars {
-          display: flex;
-          align-items: flex-end;
-          gap: 8px;
-          height: 120px;
-        }
-        .chart-bar-wrap {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          height: 100%;
-          justify-content: flex-end;
-        }
-        .chart-bar {
-          width: 100%;
-          background: rgba(0,255,136,0.15);
-          border-radius: 4px 4px 0 0;
-          border-top: 2px solid var(--green);
-          transition: height 0.6s ease;
-          min-height: 4px;
-        }
-        .chart-label { font-size: 0.65rem; color: var(--muted); text-transform: capitalize; }
-        .chart-count { font-size: 0.7rem; color: var(--green); font-weight: 500; }
+        .chart { display:flex; align-items:flex-end; gap:8px; height:120px; }
+        .chart-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:5px; height:100%; justify-content:flex-end; }
+        .chart-bar { width:100%; border-radius:5px 5px 0 0; background:rgba(0,200,150,0.15); border-top:2px solid var(--green); min-height:4px; transition:height 0.5s ease; }
+        .chart-bar:hover { background:rgba(0,200,150,0.28); }
+        .chart-n { font-size:0.68rem; color:var(--green); font-weight:600; }
+        .chart-l { font-size:0.65rem; color:var(--text2); text-transform:capitalize; }
 
-        /* ── TOP USUARIOS ── */
-        .top-list { display: flex; flex-direction: column; gap: 10px; }
-        .top-item {
-          display: flex; align-items: center; gap: 12px;
-          padding: 10px 12px; border-radius: 8px;
-          background: var(--bg3);
-          border: 1px solid var(--border);
-        }
-        .top-rank { font-size: 0.75rem; color: var(--muted); width: 20px; text-align: center; }
-        .top-avatar {
-          width: 32px; height: 32px; border-radius: 50%;
-          background: linear-gradient(135deg, var(--green), var(--blue));
-          display: flex; align-items: center; justify-content: center;
-          font-size: 0.8rem; font-weight: 700; color: #000; flex-shrink: 0;
-        }
-        .top-name { flex: 1; font-size: 0.82rem; color: var(--text); }
-        .top-xp { font-size: 0.75rem; color: var(--green); font-weight: 500; }
+        /* ── TOP LIST ── */
+        .top-list { display:flex; flex-direction:column; gap:8px; }
+        .top-item { display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; background:var(--bg3); border:1px solid var(--border); transition:border-color 0.15s; }
+        .top-item:hover { border-color:rgba(0,200,150,0.2); }
+        .top-rank { font-size:0.72rem; color:var(--text2); width:22px; text-align:center; font-weight:600; }
+        .top-av { width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--blue));display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:#000;flex-shrink:0; }
+        .top-name { flex:1; font-size:0.83rem; color:var(--text); font-weight:500; }
+        .top-xp-badge { background:rgba(0,200,150,0.12); color:var(--green); padding:3px 10px; border-radius:20px; font-size:0.72rem; font-weight:700; }
 
-        /* ── TABLA USUARIOS ── */
-        .search-bar {
-          width: 100%; padding: 10px 14px;
-          background: var(--bg3); border: 1px solid var(--border);
-          border-radius: 8px; color: var(--text);
-          font-size: 0.82rem; font-family: var(--font-mono);
-          outline: none; margin-bottom: 16px;
-          transition: border-color 0.2s;
-        }
-        .search-bar:focus { border-color: var(--green); }
-        .search-bar::placeholder { color: var(--muted); }
+        /* ── MINI STATS ── */
+        .mini-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:20px; animation:fadeUp 0.4s ease 0.15s both; }
+        .mini-card { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:20px; display:flex; align-items:center; gap:14px; transition:transform 0.2s; }
+        .mini-card:hover { transform:translateY(-2px); }
+        .mini-icon { width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0; }
+        .mini-icon.c-blue   { background:rgba(88,166,255,0.12); }
+        .mini-icon.c-purple { background:rgba(163,113,247,0.12); }
+        .mini-icon.c-orange { background:rgba(247,129,102,0.12); }
+        .mini-val { font-family:var(--fontd); font-size:1.7rem; font-weight:700; color:var(--text); line-height:1; }
+        .mini-label { font-size:0.72rem; color:var(--text2); margin-top:3px; }
+        .mini-sub   { font-size:0.68rem; color:var(--text2); }
 
-        .table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-        thead th {
-          text-align: left; padding: 10px 12px;
-          color: var(--muted); font-weight: 500;
-          font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
-          border-bottom: 1px solid var(--border);
+        /* ── TABLA ── */
+        .search-row { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+        .search-inp {
+          flex:1; min-width:200px; padding:10px 14px 10px 38px;
+          background:var(--bg3); border:1px solid var(--border);
+          border-radius:10px; color:var(--text); font-size:0.85rem;
+          font-family:var(--font); outline:none; transition:border-color 0.2s;
+          background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%238b949e' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.44 1.406a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E");
+          background-repeat:no-repeat; background-position:12px center;
         }
-        tbody tr {
-          border-bottom: 1px solid var(--border);
-          transition: background 0.15s;
-          cursor: pointer;
-        }
-        tbody tr:hover { background: var(--bg3); }
-        tbody td { padding: 12px; color: var(--text); }
+        .search-inp:focus { border-color:var(--green); }
+        .search-inp::placeholder { color:var(--text2); }
 
-        .nivel-badge {
-          background: rgba(77,159,255,0.12);
-          color: var(--blue); padding: 2px 8px;
-          border-radius: 20px; font-size: 0.7rem; font-weight: 500;
-        }
-        .xp-text { color: var(--green); font-weight: 500; }
-        .date-text { color: var(--muted); font-size: 0.72rem; }
+        .u-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px; }
+        .u-stat { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+        .u-stat-label { font-size:0.68rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:6px; }
+        .u-stat-val { font-family:var(--fontd); font-size:1.5rem; font-weight:700; color:var(--blue); }
 
-        .btn-delete {
-          background: rgba(255,107,53,0.1); border: 1px solid rgba(255,107,53,0.2);
-          color: var(--orange); padding: 4px 10px; border-radius: 6px;
-          font-size: 0.7rem; font-family: var(--font-mono);
-          cursor: pointer; transition: all 0.15s;
-        }
-        .btn-delete:hover { background: rgba(255,107,53,0.25); }
+        .tbl { width:100%; border-collapse:collapse; font-size:0.82rem; }
+        .tbl thead th { text-align:left; padding:10px 14px; color:var(--text2); font-size:0.7rem; text-transform:uppercase; letter-spacing:0.08em; border-bottom:1px solid var(--border); font-weight:500; }
+        .tbl tbody tr { border-bottom:1px solid var(--border); transition:background 0.15s; cursor:pointer; }
+        .tbl tbody tr:hover { background:var(--bg3); }
+        .tbl tbody td { padding:14px; color:var(--text); vertical-align:middle; }
+        .tbl-avatar { width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--blue));display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:#000;font-size:0.82rem;margin-right:10px;vertical-align:middle; }
+        .badge-nv { background:rgba(88,166,255,0.12); color:var(--blue); padding:3px 10px; border-radius:20px; font-size:0.72rem; font-weight:600; }
+        .badge-xp { color:var(--green); font-weight:600; }
+        .badge-estado { padding:3px 10px; border-radius:20px; font-size:0.72rem; font-weight:600; }
+        .badge-estado.espera    { background:rgba(227,179,65,0.12); color:var(--yellow); }
+        .badge-estado.jugando   { background:rgba(0,200,150,0.12); color:var(--green); }
+        .badge-estado.terminada { background:rgba(139,148,158,0.12); color:var(--text2); }
+        .muted { color:var(--text2); font-size:0.75rem; }
 
-        /* ── SALAS TABLE ── */
-        .estado-badge {
-          padding: 2px 10px; border-radius: 20px;
-          font-size: 0.7rem; font-weight: 500;
+        /* ── RANKING ── */
+        .rank-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; animation:fadeUp 0.4s ease both; }
+        .rank-item { display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:12px; background:var(--bg3); border:1px solid var(--border); transition:all 0.15s; }
+        .rank-item:hover { border-color:rgba(0,200,150,0.2); transform:translateY(-1px); }
+        .rank-num { font-family:var(--fontd); font-size:1.1rem; font-weight:700; width:28px; text-align:center; }
+        .rank-num.gold   { color:#f0c040; }
+        .rank-num.silver { color:#c0c8d0; }
+        .rank-num.bronze { color:#cd7f32; }
+        .rank-num.other  { color:var(--text2); }
+        .rank-av { width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--green),var(--blue));display:flex;align-items:center;justify-content:center;font-weight:700;color:#000;font-size:0.9rem;flex-shrink:0; }
+        .rank-info { flex:1; }
+        .rank-name { font-weight:600; color:var(--text); font-size:0.88rem; }
+        .rank-email { font-size:0.72rem; color:var(--text2); }
+        .rank-xp-pill { background:rgba(0,200,150,0.1); border:1px solid rgba(0,200,150,0.2); color:var(--green); padding:5px 14px; border-radius:20px; font-weight:700; font-size:0.8rem; white-space:nowrap; }
+
+        /* ── AJUSTES ── */
+        .ajustes-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; animation:fadeUp 0.4s ease both; }
+        .aj-section { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); padding:24px; }
+        .aj-title { font-family:var(--fontd); font-size:1rem; font-weight:600; color:var(--text); margin-bottom:4px; }
+        .aj-sub { font-size:0.75rem; color:var(--text2); margin-bottom:20px; }
+        .aj-field { margin-bottom:16px; }
+        .aj-label { font-size:0.75rem; color:var(--text2); font-weight:500; margin-bottom:6px; display:block; }
+        .aj-input {
+          width:100%; padding:10px 14px; background:var(--bg3);
+          border:1px solid var(--border); border-radius:10px;
+          color:var(--text); font-size:0.85rem; font-family:var(--font);
+          outline:none; transition:border-color 0.2s;
         }
-        .estado-badge.espera   { background: rgba(255,193,7,0.1);  color: #ffc107; }
-        .estado-badge.jugando  { background: rgba(0,255,136,0.1);  color: var(--green); }
-        .estado-badge.terminada { background: rgba(100,116,139,0.15); color: var(--muted); }
+        .aj-input:focus { border-color:var(--green); }
+        .aj-input:disabled { opacity:0.5; cursor:not-allowed; }
+        .aj-msg { font-size:0.8rem; color:var(--green); margin-top:10px; min-height:18px; }
+        .danger-zone { border-color:rgba(247,129,102,0.2); }
+        .danger-title { color:var(--orange); }
 
         /* ── MODAL ── */
-        .modal-overlay {
-          position: fixed; inset: 0;
-          background: rgba(0,0,0,0.7);
-          display: flex; align-items: center; justify-content: center;
-          z-index: 999; animation: fadeUp 0.2s ease;
-        }
-        .modal {
-          background: var(--bg2); border: 1px solid var(--border);
-          border-radius: 16px; padding: 28px; width: 420px;
-          max-width: 90vw;
-        }
-        .modal h3 {
-          font-family: var(--font-display); font-size: 1.1rem;
-          color: var(--text); margin-bottom: 20px;
-        }
-        .modal-row {
-          display: flex; justify-content: space-between;
-          padding: 8px 0; border-bottom: 1px solid var(--border);
-          font-size: 0.8rem;
-        }
-        .modal-row span:first-child { color: var(--muted); }
-        .modal-row span:last-child  { color: var(--text); text-align: right; }
-        .modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
-        .btn-close {
-          padding: 8px 16px; border-radius: 8px;
-          background: var(--bg3); border: 1px solid var(--border);
-          color: var(--muted); font-size: 0.78rem;
-          font-family: var(--font-mono); cursor: pointer;
-        }
+        .overlay { position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:999;animation:fadeIn 0.2s ease; }
+        .modal { background:var(--bg2);border:1px solid var(--border);border-radius:18px;padding:28px;width:440px;max-width:92vw;animation:fadeUp 0.25s ease; }
+        .modal h3 { font-family:var(--fontd);font-size:1.1rem;font-weight:700;color:var(--text);margin-bottom:20px;display:flex;align-items:center;gap:10px; }
+        .modal-row { display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:0.82rem; }
+        .modal-row span:first-child { color:var(--text2); }
+        .modal-actions { display:flex;gap:10px;margin-top:20px;justify-content:flex-end; }
+        .btn-ghost { padding:8px 16px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);color:var(--text2);font-size:0.78rem;font-family:var(--font);cursor:pointer;transition:all 0.15s; }
+        .btn-ghost:hover { border-color:var(--text2); color:var(--text); }
 
-        @media (max-width: 900px) {
-          .stats-grid { grid-template-columns: 1fr 1fr; }
-          .grid2 { grid-template-columns: 1fr; }
-          .sidebar { width: 60px; padding: 20px 8px; }
-          .sidebar-logo { display: none; }
-          .sidebar-badge { display: none; }
-          .nav-btn span:last-child { display: none; }
-          .sidebar-user { display: none; }
-          .main { margin-left: 60px; padding: 20px 16px; }
+        /* ── LOGOUT BTN ── */
+        .logout-btn { width:100%;margin-top:12px;padding:10px;border-radius:10px;background:rgba(247,129,102,0.08);border:1px solid rgba(247,129,102,0.15);color:var(--orange);font-size:0.82rem;font-weight:600;font-family:var(--font);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.15s; }
+        .logout-btn:hover { background:rgba(247,129,102,0.18); }
+
+        /* ── RESPONSIVE ── */
+        @media(max-width:1100px){
+          .stats-grid{ grid-template-columns:repeat(2,1fr); }
+          .grid2{ grid-template-columns:1fr; }
+          .mini-grid{ grid-template-columns:1fr 1fr; }
+          .rank-grid{ grid-template-columns:1fr; }
+          .ajustes-grid{ grid-template-columns:1fr; }
+          .u-stats{ grid-template-columns:1fr 1fr; }
+        }
+        @media(max-width:768px){
+          :root{ --side:72px; }
+          .ad-side{ width:72px!important; padding:20px 8px; }
+          .ad-side .side-label,.ad-side .side-logo-text,.ad-side .side-user-info,.ad-side .side-badge{ display:none!important; }
+          .ad-main{ margin-left:72px!important; padding:20px 16px 60px; }
+          .stats-grid{ grid-template-columns:1fr 1fr; }
+          .topbar{ flex-direction:column; align-items:flex-start; gap:12px; }
+          .topbar-right{ width:100%; justify-content:flex-start; flex-wrap:wrap; }
+          .topbar-left h1{ font-size:1.5rem; }
+          .mini-grid{ grid-template-columns:1fr; }
+          .u-stats{ grid-template-columns:1fr 1fr; }
+          .search-row{ flex-direction:column; }
+          .tbl thead{ display:none; }
+          .tbl tbody tr{ display:flex; flex-wrap:wrap; padding:10px; gap:6px; }
+          .tbl tbody td{ padding:4px 8px; border:none; }
+        }
+        @media(max-width:480px){
+          .stats-grid{ grid-template-columns:1fr; }
+          .u-stats{ grid-template-columns:1fr; }
         }
       `}</style>
 
-      <div className="admin-root">
-        {/* ── SIDEBAR ── */}
-        <aside className="sidebar">
-          <div className="sidebar-logo">Cognify</div>
-          <div className="sidebar-badge">Admin Panel</div>
+      <div className="ad-root">
+        {/* ══ SIDEBAR ══ */}
+        <aside className={`ad-side${sideOpen ? "" : " collapsed"}`}>
+          <div className="side-logo">
+            <div className="side-logo-icon">CF</div>
+            <span className="side-logo-text side-label">Cognify</span>
+          </div>
+          <div className="side-badge side-label">Admin Panel</div>
 
-          <nav className="sidebar-nav">
-            {TABS.map(tab => (
-              <button
-                key={tab}
-                className={`nav-btn${activeTab === tab ? " active" : ""}`}
-                onClick={() => setActiveTab(tab)}
-              >
-                {TAB_LABELS[tab]}
+          <nav className="side-nav">
+            {TABS.map(t => (
+              <button key={t} className={`side-btn${tab === t ? " active" : ""}`} onClick={() => setTab(t)}>
+                <span className="icon">{TAB_ICONS[t]}</span>
+                <span className="side-label">{TAB_LABELS[t]}</span>
               </button>
             ))}
           </nav>
 
-          <div className="sidebar-user">
-            <div className="sidebar-user-name">{adminNombre || "Admin"}</div>
-            <div className="sidebar-user-email">{user?.email}</div>
-            <button className="btn-logout" onClick={handleLogout}>⏻ Cerrar sesión</button>
+          <div className="side-user">
+            <div className="side-user-avatar">
+              {(adminNombre || user?.email || "A")[0].toUpperCase()}
+            </div>
+            <div className="side-user-info">
+              <div className="side-user-name">{adminNombre || "Admin"}</div>
+              <div className="side-user-email">{user?.email}</div>
+            </div>
           </div>
+          <button className="logout-btn" onClick={handleLogout}>
+            <span>↪</span> <span className="side-label">Cerrar sesión</span>
+          </button>
         </aside>
 
-        {/* ── MAIN ── */}
-        <main className="main">
+        {/* ══ MAIN ══ */}
+        <main className={`ad-main${sideOpen ? "" : " collapsed"}`}>
 
-          {/* ══ OVERVIEW ══ */}
-          {activeTab === "overview" && (
+          {/* ══ GENERAL ══ */}
+          {tab === "general" && (
             <>
-              <div className="page-header">
-                <h1 className="page-title">Dashboard</h1>
-                <p className="page-sub">HOY · {new Date().toLocaleDateString("es", { weekday: "long", day: "numeric", month: "long" }).toUpperCase()}</p>
+              <div className="topbar">
+                <div className="topbar-left">
+                  <h1>Dashboard</h1>
+                  <p>📅 Hoy • {today().charAt(0).toUpperCase() + today().slice(1)}</p>
+                </div>
+                <div className="topbar-right">
+                  <button className="btn btn-outline" onClick={handleExportarCSV}>⬇ Exportar datos</button>
+                  <button className="btn btn-primary" onClick={() => setTab("usuarios")}>+ Nuevo usuario</button>
+                </div>
               </div>
 
+              {/* Stats principales */}
               <div className="stats-grid">
-                <div className="stat-card green">
-                  <div className="stat-label">Total Usuarios</div>
-                  <div className="stat-value green">{stats.totalUsuarios}</div>
+                {[
+                  { label:"Total Usuarios",      val:stats.totalUsuarios,    sub:"Desde el inicio",      icon:"👥", color:"c-green",  pct:8  },
+                  { label:"Activos Hoy",         val:stats.activosHoy,       sub:"En las últimas 24h",   icon:"⚡", color:"c-blue",   pct:0  },
+                  { label:"Partidas Hoy",        val:stats.partidasHoy,      sub:"Nuevas partidas",      icon:"🎮", color:"c-purple", pct:15 },
+                  { label:"Retos Completados",   val:stats.retosCompletados, sub:"Esta semana",          icon:"🎯", color:"c-orange", pct:12 },
+                ].map(s => (
+                  <div key={s.label} className={`stat-card ${s.color}`}>
+                    <div className="stat-top">
+                      <div className={`stat-icon ${s.color}`}>{s.icon}</div>
+                      <span className={`stat-pct ${s.pct > 0 ? "up" : "zero"}`}>
+                        {s.pct > 0 ? "↑" : "↔"} {s.pct}%
+                      </span>
+                    </div>
+                    <div className="stat-label">{s.label}</div>
+                    <div className="stat-value">{fmt(s.val)}</div>
+                    <div className="stat-sub">{s.sub}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Gráfico + Top usuarios */}
+              <div className="grid2">
+                <div className="panel">
+                  <div className="panel-head">
+                    <span className="panel-title">Usuarios Activos</span>
+                  </div>
+                  <p className="panel-sub">Actividad diaria — últimos 7 días</p>
+                  <div className="chart">
+                    {actividadDias.map((d, i) => (
+                      <div key={i} className="chart-col">
+                        <span className="chart-n">{d.count}</span>
+                        <div className="chart-bar" style={{ height:`${Math.max((d.count/maxAct)*95,4)}px` }}/>
+                        <span className="chart-l">{d.label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="stat-card blue">
-                  <div className="stat-label">Activos Hoy</div>
-                  <div className="stat-value blue">{stats.activosHoy}</div>
-                </div>
-                <div className="stat-card purple">
-                  <div className="stat-label">Partidas Hoy</div>
-                  <div className="stat-value purple">{stats.partidasHoy}</div>
-                </div>
-                <div className="stat-card orange">
-                  <div className="stat-label">Retos Completados</div>
-                  <div className="stat-value orange">{stats.retosCompletados}</div>
+
+                <div className="panel">
+                  <div className="panel-head">
+                    <span className="panel-title">Top Usuarios por XP</span>
+                    <button className="panel-link" onClick={() => setTab("ranking")}>Ver todos →</button>
+                  </div>
+                  <p className="panel-sub">Los 5 usuarios con más experiencia</p>
+                  <div className="top-list">
+                    {usuarios.slice(0,5).map((u, i) => (
+                      <div key={u.id} className="top-item">
+                        <span className="top-rank">#{i+1}</span>
+                        <div className="top-av">{(u.nombre||u.email||"?")[0].toUpperCase()}</div>
+                        <span className="top-name">{u.nombre || u.email?.split("@")[0]}</span>
+                        <span className="top-xp-badge">{fmt(u.xp)} XP</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              <div className="grid2">
-                {/* Actividad 7 días */}
-                <div className="panel">
-                  <div className="panel-title">Usuarios activos — últimos 7 días</div>
-                  <div className="chart-bars">
-                    {actividadDias.map((d, i) => (
-                      <div key={i} className="chart-bar-wrap">
-                        <div className="chart-count">{d.count}</div>
-                        <div
-                          className="chart-bar"
-                          style={{ height: `${Math.max((d.count / maxActividad) * 90, 4)}px` }}
-                        />
-                        <div className="chart-label">{d.label}</div>
-                      </div>
-                    ))}
+              {/* Mini stats */}
+              <div className="mini-grid">
+                {[
+                  { icon:"📅", color:"c-blue",   val:fmt(extraStats.actividadMes),      label:"Actividad Mensual",   sub:"Sesiones este mes" },
+                  { icon:"🎯", color:"c-purple", val:`${extraStats.tasaCompletacion}%`, label:"Tasa de Completación",sub:"De retos finalizados" },
+                  { icon:"👤", color:"c-orange", val:`${extraStats.promedioSesion}m`,   label:"Promedio Sesión",      sub:"Tiempo promedio por usuario" },
+                ].map(m => (
+                  <div key={m.label} className="mini-card">
+                    <div className={`mini-icon ${m.color}`}>{m.icon}</div>
+                    <div>
+                      <div className="mini-val">{m.val}</div>
+                      <div className="mini-label">{m.label}</div>
+                      <div className="mini-sub">{m.sub}</div>
+                    </div>
                   </div>
-                </div>
-
-                {/* Top usuarios por XP */}
-                <div className="panel">
-                  <div className="panel-title">Top usuarios por XP</div>
-                  <div className="top-list">
-                    {usuarios.slice(0, 5).map((u, i) => (
-                      <div key={u.id} className="top-item">
-                        <span className="top-rank">#{i + 1}</span>
-                        <div className="top-avatar">
-                          {(u.nombre || u.email || "?")[0].toUpperCase()}
-                        </div>
-                        <span className="top-name">{u.nombre || u.email?.split("@")[0]}</span>
-                        <span className="top-xp">{u.xp} XP</span>
-                      </div>
-                    ))}
-                    {usuarios.length === 0 && (
-                      <p style={{ color: "var(--muted)", fontSize: "0.8rem" }}>Sin datos aún.</p>
-                    )}
-                  </div>
-                </div>
+                ))}
               </div>
             </>
           )}
 
           {/* ══ USUARIOS ══ */}
-          {activeTab === "usuarios" && (
+          {tab === "usuarios" && (
             <>
-              <div className="page-header">
-                <h1 className="page-title">Gestión de Usuarios</h1>
-                <p className="page-sub">{usuarios.length} USUARIOS REGISTRADOS</p>
+              <div className="topbar">
+                <div className="topbar-left">
+                  <h1>Gestión de Usuarios</h1>
+                  <p>👤 {usuarios.length} usuarios registrados</p>
+                </div>
+                <div className="topbar-right">
+                  <button className="btn btn-outline" onClick={handleExportarCSV}>⬇ Exportar CSV</button>
+                </div>
               </div>
 
-              <div className="panel" style={{ animation: "fadeUp 0.4s ease both" }}>
-                <input
-                  className="search-bar"
-                  placeholder="🔍 Buscar por nombre o email..."
-                  value={searchUsuario}
-                  onChange={e => setSearchUsuario(e.target.value)}
-                />
-                <div className="table-wrap">
-                  <table>
+              <div className="u-stats" style={{ animation:"fadeUp 0.4s ease both" }}>
+                {[
+                  { label:"Total", val: usuarios.length },
+                  { label:"Nivel 2+", val: nv2 },
+                  { label:"Nivel 1", val: nv1 },
+                  { label:"XP Promedio", val: fmt(xpProm) },
+                ].map(s => (
+                  <div key={s.label} className="u-stat">
+                    <div className="u-stat-label">{s.label}</div>
+                    <div className="u-stat-val">{s.val}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="panel" style={{ animation:"fadeUp 0.4s ease 0.05s both" }}>
+                <div className="search-row">
+                  <input className="search-inp" placeholder="Buscar por nombre o email..." value={searchU} onChange={e => setSearchU(e.target.value)}/>
+                </div>
+                <div style={{ overflowX:"auto" }}>
+                  <table className="tbl">
                     <thead>
                       <tr>
                         <th>Usuario</th>
@@ -555,42 +615,45 @@ export default function AdminDashboard({ user }) {
                     </thead>
                     <tbody>
                       {usuariosFiltrados.map(u => (
-                        <tr key={u.id} onClick={() => setModalUsuario(u)}>
-                          <td>{u.nombre || "—"}</td>
-                          <td className="date-text">{u.email}</td>
-                          <td><span className="nivel-badge">Nv {u.nivel || 1}</span></td>
-                          <td><span className="xp-text">{u.xp || 0}</span></td>
-                          <td>{u.racha || 0} 🔥</td>
-                          <td className="date-text">{u.ultimo_login ? new Date(u.ultimo_login).toLocaleDateString("es") : "—"}</td>
-                          <td className="date-text">{u.created_at ? new Date(u.created_at).toLocaleDateString("es") : "—"}</td>
+                        <tr key={u.id} onClick={() => setModalU(u)}>
+                          <td>
+                            <span className="tbl-avatar">{(u.nombre||u.email||"?")[0].toUpperCase()}</span>
+                            {u.nombre || "—"}
+                          </td>
+                          <td className="muted">{u.email}</td>
+                          <td><span className="badge-nv">Nv {u.nivel||1}</span></td>
+                          <td><span className="badge-xp">{fmt(u.xp)}</span></td>
+                          <td>{u.racha||0} 🔥</td>
+                          <td className="muted">{fmtDate(u.ultimo_login)}</td>
+                          <td className="muted">{fmtDate(u.created_at)}</td>
                           <td onClick={e => e.stopPropagation()}>
-                            <button className="btn-delete" onClick={() => eliminarUsuario(u.id)}>Eliminar</button>
+                            <button className="btn btn-danger" style={{ padding:"5px 12px", fontSize:"0.72rem" }} onClick={() => eliminarUsuario(u.id)}>Eliminar</button>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   {usuariosFiltrados.length === 0 && (
-                    <p style={{ textAlign: "center", padding: "32px", color: "var(--muted)", fontSize: "0.82rem" }}>
-                      No se encontraron usuarios.
-                    </p>
+                    <p style={{ textAlign:"center", padding:"32px", color:"var(--text2)", fontSize:"0.85rem" }}>No se encontraron usuarios.</p>
                   )}
                 </div>
               </div>
             </>
           )}
 
-          {/* ══ SALAS ══ */}
-          {activeTab === "salas" && (
+          {/* ══ PARTIDAS ══ */}
+          {tab === "partidas" && (
             <>
-              <div className="page-header">
-                <h1 className="page-title">Historial de Partidas</h1>
-                <p className="page-sub">{salas.length} PARTIDAS REGISTRADAS</p>
+              <div className="topbar">
+                <div className="topbar-left">
+                  <h1>Historial de Partidas</h1>
+                  <p>🎮 {salas.length} partidas registradas</p>
+                </div>
               </div>
 
-              <div className="panel" style={{ animation: "fadeUp 0.4s ease both" }}>
-                <div className="table-wrap">
-                  <table>
+              <div className="panel" style={{ animation:"fadeUp 0.4s ease both" }}>
+                <div style={{ overflowX:"auto" }}>
+                  <table className="tbl">
                     <thead>
                       <tr>
                         <th>Código</th>
@@ -602,23 +665,94 @@ export default function AdminDashboard({ user }) {
                     <tbody>
                       {salas.map(s => (
                         <tr key={s.id}>
-                          <td style={{ letterSpacing: "0.15em", color: "var(--green)", fontWeight: 500 }}>{s.codigo}</td>
+                          <td style={{ color:"var(--green)", fontWeight:600, letterSpacing:"0.1em" }}>{s.codigo}</td>
                           <td>{s.areas?.nombre || "—"}</td>
                           <td>
-                            <span className={`estado-badge ${s.estado}`}>
+                            <span className={`badge-estado ${s.estado}`}>
                               {s.estado === "espera" ? "⏳ Espera" : s.estado === "jugando" ? "🎮 Jugando" : "✅ Terminada"}
                             </span>
                           </td>
-                          <td className="date-text">{new Date(s.created_at).toLocaleString("es")}</td>
+                          <td className="muted">{new Date(s.created_at).toLocaleString("es-CO")}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   {salas.length === 0 && (
-                    <p style={{ textAlign: "center", padding: "32px", color: "var(--muted)", fontSize: "0.82rem" }}>
-                      No hay partidas registradas.
-                    </p>
+                    <p style={{ textAlign:"center", padding:"32px", color:"var(--text2)", fontSize:"0.85rem" }}>No hay partidas registradas.</p>
                   )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ══ RANKING ══ */}
+          {tab === "ranking" && (
+            <>
+              <div className="topbar">
+                <div className="topbar-left">
+                  <h1>Ranking Global</h1>
+                  <p>🏆 Clasificación por XP acumulado</p>
+                </div>
+              </div>
+
+              <div className="rank-grid">
+                {usuarios.map((u, i) => (
+                  <div key={u.id} className="rank-item">
+                    <span className={`rank-num ${i===0?"gold":i===1?"silver":i===2?"bronze":"other"}`}>
+                      {i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`}
+                    </span>
+                    <div className="rank-av">{(u.nombre||u.email||"?")[0].toUpperCase()}</div>
+                    <div className="rank-info">
+                      <div className="rank-name">{u.nombre || u.email?.split("@")[0]}</div>
+                      <div className="rank-email">{u.email}</div>
+                    </div>
+                    <span className="rank-xp-pill">{fmt(u.xp)} XP</span>
+                  </div>
+                ))}
+                {usuarios.length === 0 && (
+                  <p style={{ color:"var(--text2)", padding:"20px" }}>Sin datos aún.</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* ══ AJUSTES ══ */}
+          {tab === "ajustes" && (
+            <>
+              <div className="topbar">
+                <div className="topbar-left">
+                  <h1>Ajustes</h1>
+                  <p>⚙ Configuración del panel de administración</p>
+                </div>
+              </div>
+
+              <div className="ajustes-grid">
+                <div className="aj-section">
+                  <div className="aj-title">Perfil de Administrador</div>
+                  <div className="aj-sub">Actualiza tu información de administrador</div>
+                  <div className="aj-field">
+                    <label className="aj-label">Nombre</label>
+                    <input className="aj-input" value={ajNombre} onChange={e => setAjNombre(e.target.value)} placeholder="Tu nombre"/>
+                  </div>
+                  <div className="aj-field">
+                    <label className="aj-label">Email (no editable)</label>
+                    <input className="aj-input" value={ajEmail} disabled/>
+                  </div>
+                  <button className="btn btn-primary" style={{ width:"100%", justifyContent:"center" }} onClick={handleGuardarAjustes}>
+                    Guardar cambios
+                  </button>
+                  <div className="aj-msg">{ajustesMsg}</div>
+                </div>
+
+                <div className="aj-section danger-zone">
+                  <div className="aj-title danger-title">Zona de peligro</div>
+                  <div className="aj-sub">Estas acciones son irreversibles. Úsalas con precaución.</div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:"10px" }}>
+                    <button className="btn btn-danger" style={{ width:"100%", justifyContent:"center", padding:"12px" }}
+                      onClick={() => { if(confirm("¿Cerrar sesión?")) handleLogout(); }}>
+                      ↪ Cerrar sesión
+                    </button>
+                  </div>
                 </div>
               </div>
             </>
@@ -627,27 +761,31 @@ export default function AdminDashboard({ user }) {
         </main>
       </div>
 
-      {/* ── MODAL USUARIO ── */}
-      {modalUsuario && (
-        <div className="modal-overlay" onClick={() => setModalUsuario(null)}>
+      {/* ══ MODAL USUARIO ══ */}
+      {modalU && (
+        <div className="overlay" onClick={() => setModalU(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <h3>👤 {modalUsuario.nombre || "Usuario"}</h3>
+            <h3>
+              <div className="rank-av" style={{ width:36, height:36, fontSize:"0.85rem" }}>
+                {(modalU.nombre||modalU.email||"?")[0].toUpperCase()}
+              </div>
+              {modalU.nombre || "Usuario"}
+            </h3>
             {[
-              ["Email", modalUsuario.email],
-              ["Nivel", `Nivel ${modalUsuario.nivel || 1}`],
-              ["XP Total", `${modalUsuario.xp || 0} XP`],
-              ["Racha", `${modalUsuario.racha || 0} días 🔥`],
-              ["Último acceso", modalUsuario.ultimo_login ? new Date(modalUsuario.ultimo_login).toLocaleString("es") : "—"],
-              ["Registro", modalUsuario.created_at ? new Date(modalUsuario.created_at).toLocaleString("es") : "—"],
-            ].map(([k, v]) => (
+              ["Email",          modalU.email],
+              ["Nivel",          `Nivel ${modalU.nivel||1}`],
+              ["XP Total",       `${fmt(modalU.xp||0)} XP`],
+              ["Racha",          `${modalU.racha||0} días 🔥`],
+              ["Último acceso",  fmtDate(modalU.ultimo_login)],
+              ["Registro",       fmtDate(modalU.created_at)],
+            ].map(([k,v]) => (
               <div key={k} className="modal-row">
-                <span>{k}</span>
-                <span>{v}</span>
+                <span>{k}</span><span>{v}</span>
               </div>
             ))}
             <div className="modal-actions">
-              <button className="btn-close" onClick={() => setModalUsuario(null)}>Cerrar</button>
-              <button className="btn-delete" onClick={() => eliminarUsuario(modalUsuario.id)}>Eliminar usuario</button>
+              <button className="btn-ghost" onClick={() => setModalU(null)}>Cerrar</button>
+              <button className="btn btn-danger" onClick={() => eliminarUsuario(modalU.id)}>Eliminar usuario</button>
             </div>
           </div>
         </div>
