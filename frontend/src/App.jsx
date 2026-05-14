@@ -12,8 +12,9 @@ import Profile        from "./pages/Profile";
 import Salas          from "./pages/Salas";
 import AdminDashboard from "./pages/AdminDashboard";
 
-const INACTIVITY_LIMIT = 5 * 60 * 1000; // 5 minutos en ms
+const INACTIVITY_LIMIT = 30 * 60 * 1000; // 30 minutos
 
+// Verificar si el usuario es admin
 const checkAdmin = async (email) => {
   if (!email) return false;
   try {
@@ -29,33 +30,23 @@ const checkAdmin = async (email) => {
 };
 
 export default function App() {
-  const [user,    setUser]    = useState(null);
+  const [user,    setUser]    = useState(undefined); // undefined = todavía cargando
   const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   const inactivityTimer = useRef(null);
-  const userRef         = useRef(null);
-  // Flag para saber si es la primera carga (restaurar sesión) o un login nuevo
-  const isInitialLoad   = useRef(true);
 
   /* ── Cerrar sesión ── */
   const logout = useCallback(async () => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
-    if (userRef.current) localStorage.removeItem(`cognify_session_${userRef.current.id}`);
     await supabase.auth.signOut();
-    setUser(null);
-    setIsAdmin(false);
   }, []);
 
-  /* ── Resetear timer de inactividad ── */
+  /* ── Timer de inactividad ── */
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
-    inactivityTimer.current = setTimeout(() => {
-      logout();
-    }, INACTIVITY_LIMIT);
+    inactivityTimer.current = setTimeout(logout, INACTIVITY_LIMIT);
   }, [logout]);
 
-  /* ── Escuchar eventos de actividad ── */
   useEffect(() => {
     const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "click"];
     events.forEach(e => window.addEventListener(e, resetInactivityTimer, { passive: true }));
@@ -67,121 +58,125 @@ export default function App() {
 
   /* ── Sesión principal ── */
   useEffect(() => {
-    const initSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentUser = session?.user || null;
-      userRef.current = currentUser;
-      setUser(currentUser);
-      if (currentUser) {
+    let mounted = true;
+
+    // Escuchar cambios de auth — esto cubre tanto la carga inicial
+    // como login/logout posteriores
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!mounted) return;
+
+        const currentUser = session?.user || null;
+
+        if (event === "SIGNED_OUT" || !currentUser) {
+          if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+          setUser(null);
+          setIsAdmin(false);
+          return;
+        }
+
+        // SIGNED_IN o INITIAL_SESSION
+        setUser(currentUser);
         const admin = await checkAdmin(currentUser.email);
+        if (!mounted) return;
         setIsAdmin(admin);
         resetInactivityTimer();
-        // Marcar sesión activa al restaurar
-        localStorage.setItem(`cognify_session_${currentUser.id}`, Date.now().toString());
       }
-      setLoading(false);
-      // Después de la carga inicial, los siguientes SIGNED_IN son logins reales
-      setTimeout(() => { isInitialLoad.current = false; }, 1000);
+    );
+
+    // Cargar sesión existente al montar
+    const initSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+
+      if (!session?.user) {
+        setUser(null);
+        setIsAdmin(false);
+        return;
+      }
+
+      const admin = await checkAdmin(session.user.email);
+      if (!mounted) return;
+      setUser(session.user);
+      setIsAdmin(admin);
+      resetInactivityTimer();
     };
 
     initSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      const currentUser = session?.user || null;
-
-      // ── Detectar sesión duplicada ──
-      // Solo aplica en SIGNED_IN reales (no al restaurar sesión al abrir la pestaña)
-      if (event === "SIGNED_IN" && currentUser && !isInitialLoad.current) {
-        const sessionKey   = `cognify_session_${currentUser.id}`;
-        const prevTimestamp = localStorage.getItem(sessionKey);
-        const now           = Date.now();
-
-        if (prevTimestamp && now - parseInt(prevTimestamp) > 5000) {
-          // Hay una sesión activa en otro lugar → cerrar esta
-          localStorage.removeItem(sessionKey);
-          await supabase.auth.signOut();
-          alert("⚠️ Tu sesión fue cerrada porque iniciaste sesión en otro dispositivo o pestaña.");
-          setUser(null);
-          setIsAdmin(false);
-          setLoading(false);
-          return;
-        }
-        // Actualizar timestamp de sesión activa
-        localStorage.setItem(sessionKey, now.toString());
-      }
-
-      if (event === "SIGNED_OUT") {
-        if (userRef.current) localStorage.removeItem(`cognify_session_${userRef.current.id}`);
-        if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
-        userRef.current = null;
-        setUser(null);
-        setIsAdmin(false);
-        setLoading(false);
-        return;
-      }
-
-      userRef.current = currentUser;
-      setUser(currentUser);
-
-      if (currentUser) {
-        const admin = await checkAdmin(currentUser.email);
-        setIsAdmin(admin);
-        resetInactivityTimer();
-      } else {
-        setIsAdmin(false);
-      }
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  if (loading) {
+  // Mientras carga la sesión inicial
+  if (user === undefined) {
     return (
-      <div style={{ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh" }}>
-        <p style={{ fontFamily:"sans-serif", color:"#64748b" }}>Cargando sesión...</p>
+      <div style={{
+        display:"flex", flexDirection:"column",
+        justifyContent:"center", alignItems:"center",
+        height:"100vh", background:"#0f1117", gap:"16px"
+      }}>
+        <div style={{
+          width:"44px", height:"44px",
+          border:"4px solid #7c3aed",
+          borderTopColor:"transparent",
+          borderRadius:"50%",
+          animation:"spin 0.8s linear infinite"
+        }}/>
+        <p style={{ fontFamily:"Poppins,sans-serif", color:"#64748b", fontSize:"0.9rem" }}>
+          Cargando sesión...
+        </p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
   }
 
   return (
     <Routes>
+      {/* Ruta raíz */}
       <Route path="/" element={
         !user
           ? <Login />
           : isAdmin
-            ? <Navigate to="/admin" replace />
+            ? <Navigate to="/admin"     replace />
             : <Navigate to="/dashboard" replace />
-      } />
+      }/>
 
+      {/* Registro */}
       <Route path="/register" element={
         !user ? <Register /> : <Navigate to="/dashboard" replace />
-      } />
+      }/>
 
+      {/* Callback OAuth */}
       <Route path="/auth/callback" element={
         !user
           ? <div style={{ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh" }}>
               <p style={{ fontFamily:"sans-serif", color:"#64748b" }}>Iniciando sesión...</p>
             </div>
           : isAdmin
-            ? <Navigate to="/admin" replace />
+            ? <Navigate to="/admin"     replace />
             : <Navigate to="/dashboard" replace />
-      } />
+      }/>
 
-      <Route path="/dashboard"   element={user && !isAdmin ? <Dashboard />         : <Navigate to="/" replace />} />
-      <Route path="/areas"       element={user && !isAdmin ? <Areas />             : <Navigate to="/" replace />} />
-      <Route path="/retos/:area" element={user && !isAdmin ? <Retos />             : <Navigate to="/" replace />} />
-      <Route path="/progreso"    element={user && !isAdmin ? <Progreso />          : <Navigate to="/" replace />} />
-      <Route path="/profile"     element={user && !isAdmin ? <Profile />           : <Navigate to="/" replace />} />
-      <Route path="/salas"       element={user && !isAdmin ? <Salas user={user} /> : <Navigate to="/" replace />} />
+      {/* Rutas de usuario normal */}
+      <Route path="/dashboard"   element={user && !isAdmin ? <Dashboard />           : <Navigate to="/" replace />}/>
+      <Route path="/areas"       element={user && !isAdmin ? <Areas />               : <Navigate to="/" replace />}/>
+      <Route path="/retos/:area" element={user && !isAdmin ? <Retos />               : <Navigate to="/" replace />}/>
+      <Route path="/progreso"    element={user && !isAdmin ? <Progreso />            : <Navigate to="/" replace />}/>
+      <Route path="/profile"     element={user && !isAdmin ? <Profile />             : <Navigate to="/" replace />}/>
+      <Route path="/salas"       element={user && !isAdmin ? <Salas user={user} />   : <Navigate to="/" replace />}/>
 
+      {/* Ruta admin */}
       <Route path="/admin" element={
         user && isAdmin
           ? <AdminDashboard user={user} />
           : <Navigate to="/" replace />
-      } />
+      }/>
 
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Catch-all */}
+      <Route path="*" element={<Navigate to="/" replace />}/>
     </Routes>
   );
 }
