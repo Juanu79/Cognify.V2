@@ -12,9 +12,8 @@ import Profile        from "./pages/Profile";
 import Salas          from "./pages/Salas";
 import AdminDashboard from "./pages/AdminDashboard";
 
-const INACTIVITY_LIMIT = 30 * 60 * 1000; // 30 minutos
+const INACTIVITY_LIMIT = 30 * 60 * 1000;
 
-// Verificar si el usuario es admin
 const checkAdmin = async (email) => {
   if (!email) return false;
   try {
@@ -30,18 +29,15 @@ const checkAdmin = async (email) => {
 };
 
 export default function App() {
-  const [user,    setUser]    = useState(undefined); // undefined = todavía cargando
+  const [user,    setUser]    = useState(undefined);
   const [isAdmin, setIsAdmin] = useState(false);
-
   const inactivityTimer = useRef(null);
 
-  /* ── Cerrar sesión ── */
   const logout = useCallback(async () => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     await supabase.auth.signOut();
   }, []);
 
-  /* ── Timer de inactividad ── */
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     inactivityTimer.current = setTimeout(logout, INACTIVITY_LIMIT);
@@ -56,26 +52,19 @@ export default function App() {
     };
   }, [resetInactivityTimer]);
 
-  /* ── Sesión principal ── */
   useEffect(() => {
     let mounted = true;
 
-    // Escuchar cambios de auth — esto cubre tanto la carga inicial
-    // como login/logout posteriores
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
-
         const currentUser = session?.user || null;
-
         if (event === "SIGNED_OUT" || !currentUser) {
           if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
           setUser(null);
           setIsAdmin(false);
           return;
         }
-
-        // SIGNED_IN o INITIAL_SESSION
         setUser(currentUser);
         const admin = await checkAdmin(currentUser.email);
         if (!mounted) return;
@@ -84,22 +73,33 @@ export default function App() {
       }
     );
 
-    // Cargar sesión existente al montar
     const initSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!mounted) return;
+      try {
+        const timeoutPromise = new Promise((resolve) =>
+          setTimeout(() => resolve({ data: { session: null } }), 3000)
+        );
+        const sessionPromise = supabase.auth.getSession();
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
 
-      if (!session?.user) {
-        setUser(null);
-        setIsAdmin(false);
-        return;
+        if (!mounted) return;
+
+        if (!session?.user) {
+          setUser(null);
+          setIsAdmin(false);
+          return;
+        }
+
+        const admin = await checkAdmin(session.user.email);
+        if (!mounted) return;
+        setUser(session.user);
+        setIsAdmin(admin);
+        resetInactivityTimer();
+      } catch {
+        if (mounted) {
+          setUser(null);
+          setIsAdmin(false);
+        }
       }
-
-      const admin = await checkAdmin(session.user.email);
-      if (!mounted) return;
-      setUser(session.user);
-      setIsAdmin(admin);
-      resetInactivityTimer();
     };
 
     initSession();
@@ -110,7 +110,6 @@ export default function App() {
     };
   }, []);
 
-  // Mientras carga la sesión inicial
   if (user === undefined) {
     return (
       <div style={{
@@ -135,7 +134,6 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Ruta raíz */}
       <Route path="/" element={
         !user
           ? <Login />
@@ -144,12 +142,10 @@ export default function App() {
             : <Navigate to="/dashboard" replace />
       }/>
 
-      {/* Registro */}
       <Route path="/register" element={
         !user ? <Register /> : <Navigate to="/dashboard" replace />
       }/>
 
-      {/* Callback OAuth */}
       <Route path="/auth/callback" element={
         !user
           ? <div style={{ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh" }}>
@@ -160,7 +156,6 @@ export default function App() {
             : <Navigate to="/dashboard" replace />
       }/>
 
-      {/* Rutas de usuario normal */}
       <Route path="/dashboard"   element={user && !isAdmin ? <Dashboard />           : <Navigate to="/" replace />}/>
       <Route path="/areas"       element={user && !isAdmin ? <Areas />               : <Navigate to="/" replace />}/>
       <Route path="/retos/:area" element={user && !isAdmin ? <Retos />               : <Navigate to="/" replace />}/>
@@ -168,14 +163,12 @@ export default function App() {
       <Route path="/profile"     element={user && !isAdmin ? <Profile />             : <Navigate to="/" replace />}/>
       <Route path="/salas"       element={user && !isAdmin ? <Salas user={user} />   : <Navigate to="/" replace />}/>
 
-      {/* Ruta admin */}
       <Route path="/admin" element={
         user && isAdmin
           ? <AdminDashboard user={user} />
           : <Navigate to="/" replace />
       }/>
 
-      {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />}/>
     </Routes>
   );
