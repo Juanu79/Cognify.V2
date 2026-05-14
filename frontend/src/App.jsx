@@ -17,12 +17,12 @@ const INACTIVITY_LIMIT = 30 * 60 * 1000;
 const checkAdmin = async (email) => {
   if (!email) return false;
   try {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("admins")
       .select("id")
       .eq("email", email)
-      .single();
-    return !error && !!data;
+      .maybeSingle();
+    return !!data;
   } catch {
     return false;
   }
