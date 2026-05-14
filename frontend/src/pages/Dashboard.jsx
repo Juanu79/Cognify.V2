@@ -53,30 +53,22 @@ function AreaChart({ data, days }) {
 
 const DAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
-export default function Dashboard() {
+export default function Dashboard({ user }) {
 
-  const [userName,        setUserName]        = useState("...");
-  const [stats,           setStats]           = useState({
+  const [userName, setUserName] = useState("...");
+  const [stats,    setStats]    = useState({
     xp: 0, xpMeta: 100, nivel: 1, racha: 0,
     retos: 0, ranking: "-", retosHoy: 0,
     retosHoyMeta: 5, metaSemanal: 0,
   });
-  const [weeklyXp,        setWeeklyXp]        = useState([0, 0, 0, 0, 0, 0, 0]);
-  const [loading,         setLoading]         = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [weeklyXp, setWeeklyXp] = useState([0, 0, 0, 0, 0, 0, 0]);
+  const [loading,  setLoading]  = useState(true);
 
   useEffect(() => {
+    if (!user) return;
+
     const cargarDatos = async () => {
       try {
-       const { data: { session } } = await supabase.auth.getSession();
-       const user = session?.user;
-        if (!user) {
-          setIsAuthenticated(false);
-          setLoading(false);
-          return;
-        }
-        setIsAuthenticated(true);
-
         const { data: usuarioDB } = await supabase
           .from("usuarios")
           .select("nombre, xp, nivel, racha, ultimo_login")
@@ -165,7 +157,7 @@ export default function Dashboard() {
     };
 
     cargarDatos();
-  }, []);
+  }, [user]);
 
   const xpPct = Math.min(Math.round((stats.xp / stats.xpMeta) * 100), 100);
 
@@ -186,79 +178,6 @@ export default function Dashboard() {
             Cargando tu dashboard...
           </p>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-      </>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <>
-        <Navbar />
-        <div style={{
-          minHeight: "100vh", background: "#0f1117",
-          display: "flex", flexDirection: "column",
-          alignItems: "center", justifyContent: "center",
-          fontFamily: "Poppins, sans-serif", padding: "24px",
-          textAlign: "center"
-        }}>
-          <div style={{
-            width: "80px", height: "80px",
-            background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
-            borderRadius: "20px", display: "flex", alignItems: "center",
-            justifyContent: "center", marginBottom: "24px",
-            boxShadow: "0 8px 24px rgba(124,58,237,0.4)"
-          }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-          </div>
-
-          <h1 style={{ fontSize: "2.5rem", fontWeight: 800, color: "#f1f5f9", marginBottom: "12px" }}>
-            Bienvenido a Cognify
-          </h1>
-          <p style={{ color: "#94a3b8", fontSize: "1rem", maxWidth: "400px", marginBottom: "36px" }}>
-            La plataforma que te lleva al siguiente nivel. Aprende, compite y crece cada día.
-          </p>
-
-          <div style={{ display: "flex", gap: "14px", flexWrap: "wrap", justifyContent: "center" }}>
-            <Link to="/" style={{
-              background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
-              color: "#fff", padding: "14px 32px", borderRadius: "12px",
-              fontWeight: 700, fontSize: "1rem", textDecoration: "none",
-              boxShadow: "0 8px 20px rgba(124,58,237,0.4)"
-            }}>
-              Iniciar Sesión
-            </Link>
-            <Link to="/register" style={{
-              background: "transparent", color: "#a78bfa",
-              padding: "14px 32px", borderRadius: "12px",
-              fontWeight: 700, fontSize: "1rem", textDecoration: "none",
-              border: "2px solid #7c3aed"
-            }}>
-              Registrarse
-            </Link>
-          </div>
-
-          <div style={{
-            display: "grid", gridTemplateColumns: "repeat(3,1fr)",
-            gap: "16px", marginTop: "56px", maxWidth: "600px", width: "100%"
-          }}>
-            {[
-              { emoji: "🧠", title: "Aprende", desc: "Retos de matemáticas, lógica, programación y más" },
-              { emoji: "🏆", title: "Compite", desc: "Salas multijugador en tiempo real" },
-              { emoji: "📈", title: "Progresa", desc: "Sigue tu avance con XP y niveles" },
-            ].map((f, i) => (
-              <div key={i} style={{
-                background: "#1a1f2e", borderRadius: "16px", padding: "20px",
-                border: "1px solid #1e293b"
-              }}>
-                <div style={{ fontSize: "2rem", marginBottom: "8px" }}>{f.emoji}</div>
-                <h3 style={{ color: "#f1f5f9", fontWeight: 700, marginBottom: "6px", fontSize: "0.95rem" }}>{f.title}</h3>
-                <p style={{ color: "#64748b", fontSize: "0.82rem" }}>{f.desc}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </>
     );

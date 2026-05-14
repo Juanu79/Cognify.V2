@@ -156,7 +156,7 @@ export default function App() {
             : <Navigate to="/dashboard" replace />
       }/>
 
-      <Route path="/dashboard"   element={user && !isAdmin ? <Dashboard />           : <Navigate to="/" replace />}/>
+      <Route path="/dashboard" element={user && !isAdmin ? <Dashboard user={user} /> : <Navigate to="/" replace />}/>
       <Route path="/areas"       element={user && !isAdmin ? <Areas />               : <Navigate to="/" replace />}/>
       <Route path="/retos/:area" element={user && !isAdmin ? <Retos />               : <Navigate to="/" replace />}/>
       <Route path="/progreso"    element={user && !isAdmin ? <Progreso />            : <Navigate to="/" replace />}/>
