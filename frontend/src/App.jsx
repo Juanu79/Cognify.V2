@@ -32,6 +32,7 @@ export default function App() {
   const [user,    setUser]    = useState(undefined);
   const [isAdmin, setIsAdmin] = useState(false);
   const inactivityTimer = useRef(null);
+  const adminChecked    = useRef(false); // cache para no llamar checkAdmin más de una vez
 
   const logout = useCallback(async () => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
@@ -59,16 +60,25 @@ export default function App() {
       async (event, session) => {
         if (!mounted) return;
         const currentUser = session?.user || null;
+
         if (event === "SIGNED_OUT" || !currentUser) {
           if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
           setUser(null);
           setIsAdmin(false);
+          adminChecked.current = false; // reset cache al cerrar sesión
           return;
         }
+
         setUser(currentUser);
-        const admin = await checkAdmin(currentUser.email);
-        if (!mounted) return;
-        setIsAdmin(admin);
+
+        // Solo verificar admin una vez por sesión
+        if (!adminChecked.current) {
+          adminChecked.current = true;
+          const admin = await checkAdmin(currentUser.email);
+          if (!mounted) return;
+          setIsAdmin(admin);
+        }
+
         resetInactivityTimer();
       }
     );
@@ -78,8 +88,10 @@ export default function App() {
         const timeoutPromise = new Promise((resolve) =>
           setTimeout(() => resolve({ data: { session: null } }), 3000)
         );
-        const sessionPromise = supabase.auth.getSession();
-        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
+        const { data: { session } } = await Promise.race([
+          supabase.auth.getSession(),
+          timeoutPromise
+        ]);
 
         if (!mounted) return;
 
@@ -89,10 +101,15 @@ export default function App() {
           return;
         }
 
-        const admin = await checkAdmin(session.user.email);
-        if (!mounted) return;
+        // Solo verificar si no se hizo ya
+        if (!adminChecked.current) {
+          adminChecked.current = true;
+          const admin = await checkAdmin(session.user.email);
+          if (!mounted) return;
+          setIsAdmin(admin);
+        }
+
         setUser(session.user);
-        setIsAdmin(admin);
         resetInactivityTimer();
       } catch {
         if (mounted) {
@@ -113,18 +130,18 @@ export default function App() {
   if (user === undefined) {
     return (
       <div style={{
-        display:"flex", flexDirection:"column",
-        justifyContent:"center", alignItems:"center",
-        height:"100vh", background:"#0f1117", gap:"16px"
+        display: "flex", flexDirection: "column",
+        justifyContent: "center", alignItems: "center",
+        height: "100vh", background: "#0f1117", gap: "16px"
       }}>
         <div style={{
-          width:"44px", height:"44px",
-          border:"4px solid #7c3aed",
-          borderTopColor:"transparent",
-          borderRadius:"50%",
-          animation:"spin 0.8s linear infinite"
+          width: "44px", height: "44px",
+          border: "4px solid #7c3aed",
+          borderTopColor: "transparent",
+          borderRadius: "50%",
+          animation: "spin 0.8s linear infinite"
         }}/>
-        <p style={{ fontFamily:"Poppins,sans-serif", color:"#64748b", fontSize:"0.9rem" }}>
+        <p style={{ fontFamily: "Poppins,sans-serif", color: "#64748b", fontSize: "0.9rem" }}>
           Cargando sesión...
         </p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -148,8 +165,8 @@ export default function App() {
 
       <Route path="/auth/callback" element={
         !user
-          ? <div style={{ display:"flex", justifyContent:"center", alignItems:"center", height:"100vh" }}>
-              <p style={{ fontFamily:"sans-serif", color:"#64748b" }}>Iniciando sesión...</p>
+          ? <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
+              <p style={{ fontFamily: "sans-serif", color: "#64748b" }}>Iniciando sesión...</p>
             </div>
           : isAdmin
             ? <Navigate to="/admin"     replace />
